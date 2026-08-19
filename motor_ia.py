@@ -6,13 +6,25 @@ from runwayml import RunwayML
 from elevenlabs.client import ElevenLabs
 import PyPDF2
 import speech_recognition as sr
+import streamlit as st
 
 # ==========================================
-# COLOCA TUS CLAVES API REALES AQUÍ
+# LECTURA SEGURA DE CLAVES DESDE STREAMLIT CLOUD
 # ==========================================
-GROQ_KEY = "GROQ_API_KEY"
-RUNWAY_KEY = "RUNWAY_KEY"
-ELEVEN_KEY = "ELEVEN_KEY"
+try:
+    GROQ_KEY = st.secrets["GROQ_API_KEY"]
+except Exception:
+    GROQ_KEY = os.getenv("GROQ_API_KEY", "GCS_KEY_DEFAULT")
+
+try:
+    RUNWAY_KEY = st.secrets["RUNWAY_KEY"]
+except Exception:
+    RUNWAY_KEY = os.getenv("RUNWAY_KEY", "RUNWAY_KEY_DEFAULT")
+
+try:
+    ELEVEN_KEY = st.secrets["ELEVEN_KEY"]
+except Exception:
+    ELEVEN_KEY = os.getenv("ELEVEN_KEY", "ELEVEN_KEY_DEFAULT")
 
 DIR_RENDERS = "renders"
 os.makedirs(DIR_RENDERS, exist_ok=True)
