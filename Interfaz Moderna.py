@@ -1,64 +1,97 @@
 import streamlit as st
 from motor_ia import optimizar_prompt_con_groq, generar_video_runway, generar_voz_elevenlabs
 
-# Configuración de la página web
+# Configuración de la página
 st.set_page_config(
-    page_title="ISAIAS TITAN STUDIO v3.0",
+    page_title="ISAIAS TITAN STUDIO",
     page_icon="⚡",
     layout="wide"
 )
 
-# --- Barra Lateral (Sidebar) ---
-st.sidebar.markdown("# ⚡ TITAN")
-st.sidebar.markdown("---")
+# Estilo visual personalizado para imitar la interfaz moderna oscura de chat
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stChatInputContainer {
+        padding-bottom: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-modo = st.sidebar.radio("Selecciona el Modo:", ["Video", "Imagen", "Audio"])
+# --- BARRA LATERAL (Estilo Panel Izquierdo) ---
+with st.sidebar:
+    st.markdown("### ⚡ ISAIAS TITAN")
+    st.markdown("---")
+    
+    if st.button("➕ Nuevo Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+        
+    st.markdown("#### 🛠️ Modos de Creación")
+    modo_seleccionado = st.radio(
+        "Herramienta activa:",
+        ["🎬 Texto a Video (Runway)", "🎙️ Locución (ElevenLabs)", "🧠 Optimizar Prompt (Groq)"],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    st.markdown("#### 📂 Historial de Sesión")
+    st.caption("La Serie Épica: Poder y Traición...")
+    
+    st.markdown("---")
+    st.info("💡 **Consejo:** Escribe tu idea abajo y deja que el Titán la convierta en multimedia.")
 
-st.sidebar.markdown("---")
-st.sidebar.info("ISAIAS TITAN STUDIO - Potenciado por IA para cine y multimedia.")
-
-# --- Área Principal ---
+# --- ÁREA PRINCIPAL (Estilo Chat Fluido) ---
 st.title("🎬 ISAIAS TITAN STUDIO v3.0")
-st.subheader(f"Modo actual: {modo}")
+st.caption(f"Modo Activo: {modo_seleccionado}")
 
-# Caja de texto para la idea del usuario
-idea_usuario = st.text_area(
-    "Describe tu escena cinematográfica aquí...", 
-    placeholder="Ej: Un astronauta solitario mirando lunas gemelas en un planeta alienígena..."
-)
+# Inicializar el historial del chat en la sesión
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "¡Hola, Isaías! Soy tu director de IA. ¿Qué historia, escena o proyecto multimedia crearemos hoy?"}
+    ]
 
-# Botón de ejecución
-if st.button("🚀 GENERAR CONTENIDO", type="primary", use_container_width=True):
-    if not idea_usuario.strip():
-        st.warning("Por favor, escribe una idea o descripción antes de generar.")
-    else:
-        with st.status("ISAIAS TITAN procesando...", expanded=True) as status:
-            st.write("Analizando y optimizando prompt con Groq...")
-            prompt_optimizado = optimizar_prompt_con_groq(idea_usuario)
-            st.code(prompt_optimizado, language="text")
-            
-            if modo == "Video":
-                st.write("Generando video cinematográfico con Runway...")
-                try:
-                    ruta_video = generar_video_runway(prompt_optimizado)
-                    status.update(label="¡Generación completada con éxito!", state="complete", expanded=True)
-                    st.success("¡Video generado correctamente!")
+# Mostrar el historial de mensajes en pantalla
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# --- CAJA DE ENTRADA DE TEXTO (Abajo, estilo chat moderno) ---
+if prompt_usuario := st.chat_input("Escribe tu idea o prompt aquí..."):
+    # Guardar mensaje del usuario
+    st.session_state.messages.append({"role": "user", "content": prompt_usuario})
+    with st.chat_message("user"):
+        st.markdown(prompt_usuario)
+
+    # Generar respuesta de la IA según el modo elegido
+    with st.chat_message("assistant"):
+        with st.spinner("ISAIAS TITAN trabajando en tu solicitud..."):
+            try:
+                if "Texto a Video" in modo_seleccionado:
+                    prompt_opt = optimizar_prompt_con_groq(prompt_usuario)
+                    st.markdown(f"**Prompt optimizado:** `{prompt_opt}`")
+                    ruta_video = generar_video_runway(prompt_opt)
+                    st.success("¡Video generado con éxito!")
                     st.video(ruta_video)
-                except Exception as e:
-                    status.update(label="Error en la generación", state="error", expanded=True)
-                    st.error(f"Ocurrió un error al generar el video: {str(e)}")
-            
-            elif modo == "Audio":
-                st.write("Generando locución realista con ElevenLabs...")
-                try:
-                    ruta_audio = generar_voz_elevenlabs(idea_usuario)
-                    status.update(label="¡Locución completada!", state="complete", expanded=True)
-                    st.success("¡Audio generado correctamente!")
+                    respuesta_final = f"Aquí tienes tu escena de video basada en: *{prompt_usuario}*"
+                
+                elif "Locución" in modo_seleccionado:
+                    ruta_audio = generar_voz_elevenlabs(prompt_usuario)
+                    st.success("¡Locución generada con éxito!")
                     st.audio(ruta_audio)
-                except Exception as e:
-                    status.update(label="Error en la generación de audio", state="error", expanded=True)
-                    st.error(f"Ocurrió un error: {str(e)}")
+                    respuesta_final = f"Aquí tienes el audio generado para tu texto."
+                
+                else:  # Solo optimizar con Groq
+                    prompt_opt = optimizar_prompt_con_groq(prompt_usuario)
+                    st.markdown("### Prompt Cinematográfico:")
+                    st.code(prompt_opt, language="text")
+                    respuesta_final = "Prompt optimizado y listo para producción."
+
+                st.session_state.messages.append({"role": "assistant", "content": respuesta_final})
             
-            else:
-                status.update(label="¡Listo!", state="complete", expanded=True)
-                st.success("Prompt optimizado generado correctamente para el modo Imagen.")
+            except Exception as e:
+                error_msg = f"Ocurrió un error al procesar: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
