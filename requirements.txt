@@ -1,2 +1,7 @@
 streamlit
 groq
+runwayml
+elevenlabs
+PyPDF2
+SpeechRecognition
+requests
