@@ -1,97 +1,57 @@
 import streamlit as st
-from motor_ia import optimizar_prompt_con_groq, generar_video_runway, generar_voz_elevenlabs
 
-# Configuración de la página
-st.set_page_config(
-    page_title="ISAIAS TITAN STUDIO",
-    page_icon="⚡",
-    layout="wide"
-)
+# Configuración de página
+st.set_page_config(page_title="ISAIAS TITAN STUDIO", layout="wide")
 
-# Estilo visual personalizado para imitar la interfaz moderna oscura de chat
-st.markdown("""
-    <style>
-    .main {
-        background-color: #0e1117;
-    }
-    .stChatInputContainer {
-        padding-bottom: 20px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Inicialización del estado de la sesión
+if "chats" not in st.session_state:
+    st.session_state.chats = {"Chat Principal": []}
+if "chat_actual" not in st.session_state:
+    st.session_state.chat_actual = "Chat Principal"
 
-# --- BARRA LATERAL (Estilo Panel Izquierdo) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
-    st.markdown("### ⚡ ISAIAS TITAN")
-    st.markdown("---")
+    st.title("⚡ ISAIAS TITAN")
     
-    if st.button("➕ Nuevo Chat", use_container_width=True):
-        st.session_state.messages = []
+    if st.button("➕ Nuevo Chat"):
+        nuevo_id = f"Chat {len(st.session_state.chats) + 1}"
+        st.session_state.chats[nuevo_id] = []
+        st.session_state.chat_actual = nuevo_id
         st.rerun()
-        
-    st.markdown("#### 🛠️ Modos de Creación")
-    modo_seleccionado = st.radio(
-        "Herramienta activa:",
-        ["🎬 Texto a Video (Runway)", "🎙️ Locución (ElevenLabs)", "🧠 Optimizar Prompt (Groq)"],
-        label_visibility="collapsed"
-    )
+
+    st.subheader("🔍 Buscar")
+    busqueda = st.text_input("Filtrar chats...", "")
     
+    st.subheader("💬 Historial")
+    for chat_id in st.session_state.chats.keys():
+        if busqueda.lower() in chat_id.lower():
+            if st.button(chat_id, key=chat_id, use_container_width=True):
+                st.session_state.chat_actual = chat_id
+                st.rerun()
+
     st.markdown("---")
-    st.markdown("#### 📂 Historial de Sesión")
-    st.caption("La Serie Épica: Poder y Traición...")
-    
-    st.markdown("---")
-    st.info("💡 **Consejo:** Escribe tu idea abajo y deja que el Titán la convierta en multimedia.")
+    st.button("🎓 Estudiantes")
+    st.button("🖼️ Biblioteca de Imágenes")
 
-# --- ÁREA PRINCIPAL (Estilo Chat Fluido) ---
-st.title("🎬 ISAIAS TITAN STUDIO v3.0")
-st.caption(f"Modo Activo: {modo_seleccionado}")
+# --- ÁREA CENTRAL ---
+st.header(f"🎬 {st.session_state.chat_actual}")
 
-# Inicializar el historial del chat en la sesión
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "¡Hola, Isaías! Soy tu director de IA. ¿Qué historia, escena o proyecto multimedia crearemos hoy?"}
-    ]
+# Mostrar mensajes del chat seleccionado
+for msg in st.session_state.chats[st.session_state.chat_actual]:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# Mostrar el historial de mensajes en pantalla
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# --- CAJA DE ENTRADA DE TEXTO (Abajo, estilo chat moderno) ---
-if prompt_usuario := st.chat_input("Escribe tu idea o prompt aquí..."):
-    # Guardar mensaje del usuario
-    st.session_state.messages.append({"role": "user", "content": prompt_usuario})
+# Entrada de mensaje
+if prompt := st.chat_input("¿Qué duda tienes sobre esta historia?"):
+    # 1. Guardar mensaje usuario
+    st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(prompt_usuario)
+        st.markdown(prompt)
 
-    # Generar respuesta de la IA según el modo elegido
+    # 2. Generar respuesta de prueba (aquí conectaremos tu motor de IA luego)
     with st.chat_message("assistant"):
-        with st.spinner("ISAIAS TITAN trabajando en tu solicitud..."):
-            try:
-                if "Texto a Video" in modo_seleccionado:
-                    prompt_opt = optimizar_prompt_con_groq(prompt_usuario)
-                    st.markdown(f"**Prompt optimizado:** `{prompt_opt}`")
-                    ruta_video = generar_video_runway(prompt_opt)
-                    st.success("¡Video generado con éxito!")
-                    st.video(ruta_video)
-                    respuesta_final = f"Aquí tienes tu escena de video basada en: *{prompt_usuario}*"
-                
-                elif "Locución" in modo_seleccionado:
-                    ruta_audio = generar_voz_elevenlabs(prompt_usuario)
-                    st.success("¡Locución generada con éxito!")
-                    st.audio(ruta_audio)
-                    respuesta_final = f"Aquí tienes el audio generado para tu texto."
-                
-                else:  # Solo optimizar con Groq
-                    prompt_opt = optimizar_prompt_con_groq(prompt_usuario)
-                    st.markdown("### Prompt Cinematográfico:")
-                    st.code(prompt_opt, language="text")
-                    respuesta_final = "Prompt optimizado y listo para producción."
-
-                st.session_state.messages.append({"role": "assistant", "content": respuesta_final})
-            
-            except Exception as e:
-                error_msg = f"Ocurrió un error al procesar: {str(e)}"
-                st.error(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        respuesta = f"Entendido, sobre '{prompt}'. Basado en nuestra conversación anterior, esto es lo que pienso..."
+        st.markdown(respuesta)
+        
+        # 3. Guardar respuesta asistente
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta})
