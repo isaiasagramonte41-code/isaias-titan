@@ -59,7 +59,6 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Reciente**")
     
-    # Mostrar solo chats que NO estén vacíos
     for chat_id, mensajes in st.session_state.chats.items():
         if len(mensajes) > 0:
             if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
@@ -83,7 +82,7 @@ elif st.session_state.modo == "🕒 Historial":
                 st.rerun()
 
 elif st.session_state.modo == "💬 Nuevo Proyecto" or len(st.session_state.chats.get(st.session_state.chat_actual, [])) == 0:
-    # --- PANTALLA DE BIENVENIDA MODIFICADA ---
+    # --- PANTALLA DE BIENVEIDA COMPLETA ---
     st.markdown("<h1 style='text-align: center;'>Hola, soy TITAN✨</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>El espacio de trabajo de IA todo en uno que convierte a todos en profesionales</p>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -91,32 +90,46 @@ elif st.session_state.modo == "💬 Nuevo Proyecto" or len(st.session_state.chat
     # Caja de chat grande central
     prompt_nuevo = st.chat_input("Pregúntame lo que quieras o asígname una tarea.")
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>### 🛠️ Herramientas de IA", unsafe_allow_html=True)
     
-    # Botones de herramientas inferiores
-    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-    with c1:
-        if st.button("📁\nAgente Pres.", key="btn_pres"):
-            st.session_state.modo = "💬 Chat Principal"
-            st.rerun()
-    with c2:
-        if st.button("📊\nHojas IA", key="btn_hojas"):
-            pass
-    with c3:
-        if st.button("🖼️\nImagen IA", key="btn_img"):
-            pass
-    with c4:
-        if st.button("🎬\nVideo IA", key="btn_vid"):
-            pass
-    with c5:
-        if st.button("🎨\nDiseño IA", key="btn_dis"):
-            pass
-    with c6:
-        if st.button("✍️\nEscritura", key="btn_esc"):
-            pass
-    with c7:
-        if st.button("➕\nMás", key="btn_mas"):
-            pass
+    # Fila 1 de funciones
+    f1_c1, f1_c2, f1_c3, f1_c4, f1_c5, f1_c6, f1_c7 = st.columns(7)
+    with f1_c1: st.button("📁 Agente Pres.", key="h1")
+    with f1_c2: st.button("📊 Hojas IA", key="h2")
+    with f1_c3: st.button("🖼️ Imagen IA", key="h3")
+    with f1_c4: st.button("🎬 Video IA", key="h4")
+    with f1_c5: st.button("🎨 Diseño IA", key="h5")
+    with f1_c6: st.button("✍️ Escritura", key="h6")
+    with f1_c7: st.button("🤖 Tutor IA", key="h7")
+
+    # Fila 2 de funciones
+    f2_c1, f2_c2, f2_c3, f2_c4, f2_c5, f2_c6, f2_c7 = st.columns(7)
+    with f2_c1: st.button("📄 Redactor", key="h8")
+    with f2_c2: st.button("📈 Presentación", key="h9")
+    with f2_c3: st.button("✒️ Humanizador", key="h10")
+    with f2_c4: st.button("🔬 Investigación", key="h11")
+    with f2_c5: st.button("🎙️ Podcast IA", key="h12")
+    with f2_c6: st.button("📋 Currículum", key="h13")
+    with f2_c7: st.button("✏️ Parafraseador", key="h14")
+
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+    
+    # --- SECCIÓN DE VIDEOS E IMÁGENES RECOMENDADAS ---
+    st.markdown("### 🎬 Creaciones Destacadas y Videos con IA")
+    
+    tab_sel, tab_neg, tab_edu, tab_cre = st.tabs(["Selección", "Negocios", "Educación y académico", "Creatividad"])
+    
+    with tab_sel:
+        v1, v2, v3 = st.columns(3)
+        with v1:
+            st.video("https://www.w3schools.com/html/mov_bbb.mp4")
+            st.caption("🎬 Video IA: Introducción Dinámica TITAN")
+        with v2:
+            st.video("https://www.w3schools.com/html/mov_bbb.mp4")
+            st.caption("🎬 Video IA: Animación de Producto")
+        with v3:
+            st.video("https://www.w3schools.com/html/mov_bbb.mp4")
+            st.caption("🎬 Video IA: Explicativo 3D")
 
     if prompt_nuevo:
         st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt_nuevo})
