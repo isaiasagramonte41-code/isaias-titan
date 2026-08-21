@@ -3,7 +3,7 @@ import streamlit as st
 # Configuración de página
 st.set_page_config(page_title="ISAIAS TITAN STUDIO", layout="wide")
 
-# --- CSS PERSONALIZADO PARA ESTILO LIMPIO Y MODERNO ---
+# --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
     [data-testid="stSidebarNav"] {display: none;}
@@ -53,12 +53,27 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Reciente**")
     
-    for chat_id, mensajes in st.session_state.chats.items():
+    # Listar chats recientes con opción rápida de eliminar
+    chats_a_borrar = None
+    for chat_id, mensajes in list(st.session_state.chats.items()):
         if len(mensajes) > 0:
-            if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
-                st.session_state.chat_actual = chat_id
-                st.session_state.modo = "💬 Chat Activo"
-                st.rerun()
+            c_col1, c_col2 = st.columns([0.8, 0.2])
+            with c_col1:
+                if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
+                    st.session_state.chat_actual = chat_id
+                    st.session_state.modo = "💬 Chat Activo"
+                    st.rerun()
+            with c_col2:
+                if st.button("🗑️", key=f"del_rec_{chat_id}", help="Eliminar chat"):
+                    chats_a_borrar = chat_id
+
+    # Lógica para borrar desde la barra lateral
+    if chats_a_borrar:
+        del st.session_state.chats[chats_a_borrar]
+        if st.session_state.chat_actual == chats_a_borrar:
+            st.session_state.chat_actual = None
+            st.session_state.modo = "💬 Nuevo Proyecto"
+        st.rerun()
 
 # --- ÁREA CENTRAL ---
 if st.session_state.modo == "📁 Mis documentos":
@@ -68,26 +83,34 @@ if st.session_state.modo == "📁 Mis documentos":
 
 elif st.session_state.modo == "🕒 Historial":
     st.markdown("### 🕒 Historial de conversaciones")
-    for chat_id, mensajes in st.session_state.chats.items():
+    for chat_id, mensajes in list(st.session_state.chats.items()):
         if len(mensajes) > 0:
-            if st.button(f"Abrir chat: {chat_id}", key=f"hist_{chat_id}"):
-                st.session_state.chat_actual = chat_id
-                st.session_state.modo = "💬 Chat Activo"
-                st.rerun()
+            col_h1, col_h2 = st.columns([0.9, 0.1])
+            with col_h1:
+                if st.button(f"Abrir chat: {chat_id}", key=f"hist_{chat_id}"):
+                    st.session_state.chat_actual = chat_id
+                    st.session_state.modo = "💬 Chat Activo"
+                    st.rerun()
+            with col_h2:
+                if st.button("🗑️", key=f"del_hist_{chat_id}"):
+                    del st.session_state.chats[chat_id]
+                    if st.session_state.chat_actual == chat_id:
+                        st.session_state.chat_actual = None
+                        st.session_state.modo = "💬 Nuevo Proyecto"
+                    st.rerun()
 
 elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuevo Proyecto":
-    # --- PANTALLA DE BIENVENIDA (Estilo Imagen 1) ---
+    # --- PANTALLA DE BIENVENIDA ---
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("<h1 style='text-align: center;'>Hola, soy TITAN✨</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>El espacio de trabajo de IA todo en uno que convierte a todos en profesionales</p>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Cuadro de texto central idéntico a la imagen 1
     prompt_inicial = st.chat_input("Pregúntame lo que quieras o asígname una tarea.")
     
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Las 14 herramientas organizadas en dos filas
+    # Las 14 herramientas
     st.markdown("##### 🛠️ Herramientas disponibles", unsafe_allow_html=True)
     f1_c1, f1_c2, f1_c3, f1_c4, f1_c5, f1_c6, f1_c7 = st.columns(7)
     with f1_c1: st.button("📁 Agente Pres.", key="h1")
@@ -109,7 +132,7 @@ elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuev
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
     
-    # Sección de videos con IA abajo que se pueden reproducir
+    # Galería de videos IA
     st.markdown("### 🎬 Videos con IA Destacados")
     v1, v2, v3 = st.columns(3)
     with v1:
@@ -133,8 +156,17 @@ elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuev
         st.rerun()
 
 else:
-    # --- VISTA DE CONVERSACIÓN ACTIVA (Estilo Imagen 2) ---
-    st.markdown(f"### {st.session_state.chat_actual}")
+    # --- VISTA DE CONVERSACIÓN ACTIVA CON BOTÓN DE BORRAR ---
+    col_t1, col_t2 = st.columns([8, 2])
+    with col_t1:
+        st.markdown(f"### {st.session_state.chat_actual}")
+    with col_t2:
+        if st.button("🗑️ Borrar chat", use_container_width=True):
+            del st.session_state.chats[st.session_state.chat_actual]
+            st.session_state.chat_actual = None
+            st.session_state.modo = "💬 Nuevo Proyecto"
+            st.rerun()
+
     st.markdown("---")
 
     # Mostrar mensajes previos
@@ -142,7 +174,7 @@ else:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Tarjetas de sugerencia rápida (Estilo Imagen 2)
+    # Tarjetas de sugerencia rápida
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📄 Ayúdame a redactar un currículum profesional"):
         st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": "Ayúdame a redactar un currículum profesional"})
@@ -154,7 +186,7 @@ else:
         st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": "📊 **[Presentación AI]**: ¡Claro que sí! Dime de qué tema trata y cuántas diapositivas necesitas."})
         st.rerun()
 
-    # Caja de texto fija inferior para continuar el chat
+    # Caja de texto fija inferior
     prompt_continuo = st.chat_input("¿En qué puedo ayudarte?")
     
     if prompt_continuo:
