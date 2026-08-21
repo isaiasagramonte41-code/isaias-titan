@@ -3,54 +3,75 @@ import streamlit as st
 # Configuración de página
 st.set_page_config(page_title="ISAIAS TITAN STUDIO", layout="wide")
 
+# --- CSS PERSONALIZADO PARA ESTILO GEMINI EN LA BARRA LATERAL ---
+st.markdown("""
+<style>
+    /* Ocultar elementos predeterminados de Streamlit que ocupan espacio extra */
+    [data-testid="stSidebarNav"] {display: none;}
+    
+    /* Estilizar los botones de la barra lateral para que parezcan texto plano minimalista */
+    [data-testid="stSidebar"] button {
+        background-color: transparent !important;
+        border: none !important;
+        color: inherit !important;
+        text-align: left !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        font-weight: 400 !important;
+    }
+    [data-testid="stSidebar"] button:hover {
+        background-color: rgba(150, 150, 150, 0.15) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Inicialización de estado
 if "chats" not in st.session_state:
-    st.session_state.chats = {
-        "Ciudad futurista de noche": [],
-        "Astronauta en Marte": [],
-        "Causas Revolución Francesa": []
-    }
+    st.session_state.chats = {"Nueva conversación": []}
 if "chat_actual" not in st.session_state:
-    st.session_state.chat_actual = "Ciudad futurista de noche"
+    st.session_state.chat_actual = "Nueva conversación"
 if "modo" not in st.session_state:
     st.session_state.modo = "🔍 Buscar conversaciones"
 
-# --- BARRA LATERAL ---
+# --- BARRA LATERAL (Estilo Minimalista Gemini) ---
 with st.sidebar:
     st.markdown("### ⚡ ISAIAS TITAN")
-    if st.button("✏️ Nueva conversación", use_container_width=True):
+    
+    if st.button("✏️ Nueva conversación"):
         nuevo_id = f"Chat {len(st.session_state.chats) + 1}"
         st.session_state.chats[nuevo_id] = []
         st.session_state.chat_actual = nuevo_id
         st.rerun()
 
-    st.markdown("")
-    if st.button("🔍 Buscar conversaciones", use_container_width=True): st.session_state.modo = "🔍 Buscar conversaciones"
-    if st.button("🎓 Estudiantes", use_container_width=True): st.session_state.modo = "🎓 Estudiantes"
-    if st.button("🖼️ Imágenes", use_container_width=True): st.session_state.modo = "🖼️ Imágenes"
-    if st.button("📚 Biblioteca", use_container_width=True): st.session_state.modo = "📚 Biblioteca"
+    st.markdown("---")
+    
+    # Opciones de navegación con estilo plano
+    if st.button("🔍 Buscar conversaciones"): 
+        st.session_state.modo = "🔍 Buscar conversaciones"
+    if st.button("🎓 Estudiantes"): 
+        st.session_state.modo = "🎓 Estudiantes"
+    if st.button("🖼️ Imágenes"): 
+        st.session_state.modo = "🖼️ Imágenes"
+    if st.button("📚 Biblioteca"): 
+        st.session_state.modo = "📚 Biblioteca"
 
     st.markdown("---")
     st.markdown("**Cuadernos**")
-    if st.button("➕ Nuevo cuaderno", use_container_width=True): pass
-    
-    st.markdown("---")
-    st.markdown("**Recientes**")
-    for chat_id in st.session_state.chats.keys():
-        if st.button(chat_id, key=f"hist_{chat_id}", use_container_width=True):
-            st.session_state.chat_actual = chat_id
-            st.rerun()
+    if st.button("➕ Nuevo cuaderno"): 
+        pass
 
 # --- ÁREA CENTRAL ---
 st.header("⚡ ISAIAS TITAN STUDIO v3.0")
 st.markdown(f"**Modo Activo:** `{st.session_state.modo}`")
 st.markdown("---")
 
+# Mostrar mensajes del chat actual
 for msg in st.session_state.chats[st.session_state.chat_actual]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- ZONA DE ENTRADA INFERIOR (Fila limpia) ---
+# --- ZONA DE ENTRADA INFERIOR (Fila limpia con el signo de más y el micrófono) ---
 c1, c2, c3 = st.columns([0.5, 8.5, 0.5])
 
 archivo_cargado = None
@@ -73,7 +94,6 @@ with c3:
 
 # --- LÓGICA DE INTELIGENCIA DE TITAN ---
 if prompt:
-    # 1. Guardar mensaje del usuario
     mensaje_usuario = prompt
     if archivo_cargado:
         mensaje_usuario = f"[Archivo adjunto: {archivo_cargado.name}]\n\n{prompt}"
@@ -82,21 +102,18 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(mensaje_usuario)
 
-    # 2. Generar respuesta inteligente de TITAN
     texto_lower = prompt.lower()
     
     if "creador" in texto_lower or "quién te creó" in texto_lower or "quien te hizo" in texto_lower:
         respuesta = "😎 Mi creador y mente maestra es **Isaías**. Él me diseñó y programó para convertirme en el mejor asistente de inteligencia artificial."
-    
     elif "video" in texto_lower or "vídeo" in texto_lower or "guion para video" in texto_lower:
-        respuesta = f"🎬 **[Generador de Video TITAN]**: He procesado tu solicitud para video basada en tu texto. \n\n* **Idea / Prompt analizado:** '{prompt}'\n* **Estructura sugerida:** Escena 1 (Introducción atractiva), Escena 2 (Desarrollo del contenido), Escena 3 (Cierre épico).\n\n*(Módulo listo para conectar con API de generación de video en la siguiente fase)*."
-    
+        respuesta = f"🎬 **[Generador de Video TITAN]**: He procesado tu solicitud de video basada en tu texto. \n\n* **Prompt analizado:** '{prompt}'\n* **Estructura sugerida:** Escena 1 (Introducción), Escena 2 (Desarrollo), Escena 3 (Cierre)."
     elif "tarea" in texto_lower or "explícame" in texto_lower or "ayuda con" in texto_lower:
-        respuesta = f"📚 **[Tutor Académico TITAN]**: Entendido con tu tarea. Analizando tu consulta sobre *'{prompt}'*... \n\nAquí tienes una explicación detallada y paso a paso para que domines el tema con éxito. ¿Deseas que profundice en algún punto en específico?"
-    
+        respuesta = f"📚 **[Tutor Académico TITAN]**: Analizando tu consulta sobre *'{prompt}'*... Aquí tienes una explicación detallada paso a paso."
     else:
-        respuesta = f"🤖 **[TITAN Pro]**: He procesado tu mensaje: *'{prompt}'*. Como inteligencia artificial de vanguardia, estoy aquí para ayudarte a investigar, redactar y estructurar tus ideas. ¿Qué más deseas hacer hoy?"
+        respuesta = f"🤖 **[TITAN Pro]**: He procesado tu mensaje: *'{prompt}'*. ¿Qué más deseas hacer hoy?"
 
     st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta})
     with st.chat_message("assistant"):
-        st.markdown(respuesta)
+        respuesta_container = st.empty()
+        respuesta_container.markdown(respuesta)
