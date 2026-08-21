@@ -30,19 +30,14 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**NAVEGACIÓN**")
     
-    if st.button("🔍 Buscar conversaciones", use_container_width=True): 
-        st.session_state.modo = "🔍 Buscar"
-    if st.button("🎓 Estudiantes", use_container_width=True): 
-        st.session_state.modo = "🎓 Estudiantes"
-    if st.button("🖼️ Imágenes", use_container_width=True): 
-        st.session_state.modo = "🖼️ Imágenes"
-    if st.button("📚 Biblioteca", use_container_width=True): 
-        st.session_state.modo = "📚 Biblioteca"
+    if st.button("🔍 Buscar conversaciones", use_container_width=True): st.session_state.modo = "🔍 Buscar"
+    if st.button("🎓 Estudiantes", use_container_width=True): st.session_state.modo = "🎓 Estudiantes"
+    if st.button("🖼️ Imágenes", use_container_width=True): st.session_state.modo = "🖼️ Imágenes"
+    if st.button("📚 Biblioteca", use_container_width=True): st.session_state.modo = "📚 Biblioteca"
 
     st.markdown("---")
     st.markdown("**CUADERNOS**")
-    if st.button("➕ Nuevo cuaderno", use_container_width=True):
-        pass
+    if st.button("➕ Nuevo cuaderno", use_container_width=True): pass
 
     st.markdown("---")
     st.markdown("**Recientes**")
@@ -61,46 +56,55 @@ for msg in st.session_state.chats[st.session_state.chat_actual]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- BARRA DE ACCESOS DIRECTOS AL LADO DEL CHAT ---
-# Creamos una fila horizontal compacta justo antes de la entrada del chat
-col_btn1, col_btn2, col_vacía = st.columns([1.2, 1, 4])
+# --- ZONA DE ENTRADA ESTILO GEMINI ---
+# Creamos una sección inferior organizada
+col_input1, col_input2, col_input3 = st.columns([0.8, 8.4, 0.8])
 
-with col_btn1:
-    # Usamos un file_uploader minimalista para simular el botón de adjuntar
-    archivo_subido = st.file_uploader(
-        "➕ Adjuntar", 
-        type=["pdf", "docx", "pptx", "png", "jpg", "jpeg", "txt"],
-        label_visibility="collapsed"
-    )
+with col_input1:
+    # Botón "+" con menú desplegable idéntico al de Gemini
+    with st.popover("➕", help="Opciones de adjunto y creación"):
+        st.markdown("### Opciones de Entrada")
+        subir_archivo = st.file_uploader("📁 Subir archivos", type=["pdf", "docx", "pptx", "png", "jpg"])
+        if st.button("☁️ Añadir desde Drive"):
+            st.info("Conexión con Drive simulada.")
+        if st.button("🖼️ Crear imagen"):
+            st.session_state.modo = "🖼️ Imágenes"
+            st.rerun()
+        if st.button("🎵 Crear música"):
+            st.toast("Módulo de música en desarrollo...")
+        if st.button("✨ Aprendizaje guiado"):
+            st.session_state.modo = "🎓 Estudiantes"
+            st.rerun()
 
-with col_btn2:
-    if st.button("🎙️ Dictar", use_container_width=True):
+with col_input2:
+    placeholders = {
+        "🔍 Buscar": "Pregunta o investiga con TITAN...",
+        "🎓 Estudiantes": "Pregúntale al tutor académico...",
+        "🖼️ Imágenes": "Describe la imagen que deseas generar...",
+        "📚 Biblioteca": "Busca dentro de tus archivos..."
+    }
+    prompt = st.chat_input(placeholders.get(st.session_state.modo, "Pregunta a TITAN..."))
+
+with col_input3:
+    # Botón de micrófono a la derecha
+    if st.button("🎙️", help="Dictar por voz"):
         st.session_state.usando_voz = not st.session_state.usando_voz
 
 if st.session_state.usando_voz:
     st.info("🎙️ [Micrófono Activo]: Escuchando y transcribiendo...")
 
-if archivo_subido is not None:
-    st.success(f"📎 Archivo listo: **{archivo_subido.name}**")
-
-# Entrada de texto del chat (Abajo del todo)
-placeholders = {
-    "🔍 Buscar": "¿Qué deseas buscar o investigar hoy?",
-    "🎓 Estudiantes": "Pregúntale al tutor académico...",
-    "🖼️ Imágenes": "Describe la imagen que deseas generar...",
-    "📚 Biblioteca": "Busca dentro de tus archivos y documentos..."
-}
-
-if prompt := st.chat_input(placeholders.get(st.session_state.modo, "Pregunta a TITAN...")):
+# Procesamiento del mensaje
+if prompt:
     mensaje_final = prompt
-    if 'archivo_subido' in locals() and archivo_subido is not None:
-        mensaje_final = f"[Archivo adjunto: {archivo_subido.name}] \n\n {prompt}"
+    if 'subir_archivo' in locals() and subir_archivo is not None:
+        mensaje_final = f"[Archivo adjunto: {subir_archivo.name}]\n\n{prompt}"
+        st.success(f"📎 Archivo listo: {subir_archivo.name}")
 
     st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": mensaje_final})
     with st.chat_message("user"):
         st.markdown(mensaje_final)
 
     with st.chat_message("assistant"):
-        respuesta = f"🤖 [TITAN Pro]: Procesando tu solicitud..."
+        respuesta = f"🤖 [TITAN Pro]: Analizando tu solicitud..."
         st.markdown(respuesta)
         st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta})
