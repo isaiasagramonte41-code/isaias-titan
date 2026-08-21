@@ -14,8 +14,6 @@ if "chat_actual" not in st.session_state:
     st.session_state.chat_actual = "Ciudad futurista de noche"
 if "modo" not in st.session_state:
     st.session_state.modo = "🔍 Buscar conversaciones"
-if "usando_voz" not in st.session_state:
-    st.session_state.usando_voz = False
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -43,12 +41,13 @@ with st.sidebar:
     if st.button("➕ Nuevo cuaderno", use_container_width=True):
         pass
 
-    fn_recientes = st.expander("Recientes", expanded=True)
-    with fn_recientes:
-        for chat_id in st.session_state.chats.keys():
-            if st.button(chat_id, key=f"hist_{chat_id}", use_container_width=True):
-                st.session_state.chat_actual = chat_id
-                st.rerun()
+    st.markdown("---")
+    st.markdown("**Recientes**")
+    # Listado directo de chats sin el cuadro de expander
+    for chat_id in st.session_state.chats.keys():
+        if st.button(chat_id, key=f"hist_{chat_id}", use_container_width=True):
+            st.session_state.chat_actual = chat_id
+            st.rerun()
 
 # --- ÁREA CENTRAL ---
 st.header("⚡ ISAIAS TITAN STUDIO v3.0")
@@ -60,8 +59,7 @@ for msg in st.session_state.chats[st.session_state.chat_actual]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- PANEL DE HERRAMIENTAS Y CHAT INTEGRADO ---
-# Usamos un expander limpio y elegante arriba del chat para que no rompa la estética
+# --- PANEL DE HERRAMIENTAS Y CHAT ---
 with st.expander("➕ Opciones avanzadas (Subir archivos, Drive, Imágenes)", expanded=False):
     subir_archivo = st.file_uploader("Sube tus documentos de clase o imágenes", type=["pdf", "docx", "pptx", "png", "jpg"])
     col_opt1, col_opt2 = st.columns(2)
@@ -73,7 +71,6 @@ with st.expander("➕ Opciones avanzadas (Subir archivos, Drive, Imágenes)", ex
             st.session_state.modo = "🖼️ Imágenes"
             st.rerun()
 
-# Entrada de texto principal de Streamlit (el chat nativo que se ve impecable)
 placeholders = {
     "🔍 Buscar conversaciones": "Pregunta o investiga con TITAN...",
     "🎓 Estudiantes": "Pregúntale al tutor académico...",
