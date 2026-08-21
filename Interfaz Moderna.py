@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 # Configuración de página
 st.set_page_config(page_title="ISAIAS TITAN STUDIO", layout="wide")
@@ -53,7 +54,6 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Reciente**")
     
-    # Listar chats recientes con menú flotante limpio (estilo 3 puntos)
     for chat_id, mensajes in list(st.session_state.chats.items()):
         if len(mensajes) > 0:
             c1, c2 = st.columns([0.8, 0.2])
@@ -63,7 +63,6 @@ with st.sidebar:
                     st.session_state.modo = "💬 Chat Activo"
                     st.rerun()
             with c2:
-                # Menú flotante (popover) de tres puntos para opciones ocultas
                 with st.popover("⋮", help="Opciones"):
                     if st.button("🗑️ Eliminar chat", key=f"del_pop_{chat_id}"):
                         del st.session_state.chats[chat_id]
@@ -144,10 +143,19 @@ elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuev
         st.caption("🎬 Explicador 3D con IA")
 
     if prompt_inicial:
-        nuevo_id = f"Chat {len(st.session_state.chats) + 1}"
+        nuevo_id = prompt_inicial[:25] + "..." if len(prompt_inicial) > 25 else prompt_inicial
+        
+        # Simular procesamiento al estilo de la imagen
+        with st.spinner("Procesando durante 6s..."):
+            time.sleep(1.5) # Pequeña pausa elegante
+            
+        respuesta_texto = f"¡Muy bien, gracias por preguntar! 😊 Siempre listo y con energía para ayudarte. ¿Y tú, cómo estás? ¿Hay algo en lo que pueda darte una mano hoy? 💪"
+        if "cómo estas" not in prompt_inicial.lower() and "hola" not in prompt_inicial.lower():
+            respuesta_texto = f"¡Excelente consulta! He analizado tu solicitud sobre *'{prompt_inicial}'* con éxito. 🚀 ¿Hay algún detalle adicional que te gustaría que profundicemos?"
+
         st.session_state.chats[nuevo_id] = [
             {"role": "user", "content": prompt_inicial},
-            {"role": "assistant", "content": f"¡Hola! 👋 ¿En qué puedo ayudarte hoy con respecto a: *'{prompt_inicial}'*?"}
+            {"role": "assistant", "content": f"Procesado durante 6s\n\n---\n\n{respuesta_texto}"}
         ]
         st.session_state.chat_actual = nuevo_id
         st.session_state.modo = "💬 Chat Activo"
@@ -159,7 +167,6 @@ else:
     with col_t1:
         st.markdown(f"### {st.session_state.chat_actual}")
     with col_t2:
-        # Menú de tres puntos también arriba en el chat activo para borrar
         with st.popover("⋮ Opciones", use_container_width=True):
             if st.button("🗑️ Eliminar este chat", key="del_chat_activo"):
                 del st.session_state.chats[st.session_state.chat_actual]
@@ -177,13 +184,17 @@ else:
     # Tarjetas de sugerencia rápida
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📄 Ayúdame a redactar un currículum profesional"):
-        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": "Ayúdame a redactar un currículum profesional"})
-        st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": "📄 **[Currículum AI]**: Perfecto. ¿Para qué puesto de trabajo deseas postularte y cuáles son tus habilidades principales?"})
+        prompt_sugerido = "Ayúdame a redactar un currículum profesional"
+        respuesta_sugerida = "Procesado durante 5s\n\n---\n\n📄 **[Currículum AI]**: Perfecto. ¿Para qué puesto de trabajo deseas postularte y cuáles son tus habilidades principales? 📋"
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt_sugerido})
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta_sugerida})
         st.rerun()
         
     if st.button("📊 Crea una presentación sobre un tema de mi interés"):
-        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": "Crea una presentación sobre un tema de mi interés"})
-        st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": "📊 **[Presentación AI]**: ¡Claro que sí! Dime de qué tema trata y cuántas diapositivas necesitas."})
+        prompt_sugerido = "Crea una presentación sobre un tema de mi interés"
+        respuesta_sugerida = "Procesado durante 4s\n\n---\n\n📊 **[Presentación AI]**: ¡Claro que sí! Dime de qué tema trata y cuántas diapositivas necesitas. 📈"
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt_sugerido})
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta_sugerida})
         st.rerun()
 
     # Caja de texto fija inferior
@@ -191,6 +202,10 @@ else:
     
     if prompt_continuo:
         st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt_continuo})
-        respuesta_ia = f"🤖 **[TITAN AI]**: He procesado tu mensaje: *'{prompt_continuo}'*. ¿Qué más hacemos?"
+        
+        with st.spinner("Procesando durante 6s..."):
+            time.sleep(1.5)
+            
+        respuesta_ia = f"Procesado durante 6s\n\n---\n\n🤖 **[TITAN AI]**: He procesado tu mensaje: *'{prompt_continuo}'*. ¿Qué más hacemos? ✨"
         st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta_ia})
         st.rerun()
