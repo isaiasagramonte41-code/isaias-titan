@@ -13,38 +13,44 @@ if "chats" not in st.session_state:
 if "chat_actual" not in st.session_state:
     st.session_state.chat_actual = "Ciudad futurista de noche"
 if "modo" not in st.session_state:
-    st.session_state.modo = "🔍 Buscar"
+    st.session_state.modo = "🔍 Buscar conversaciones"
 if "usando_voz" not in st.session_state:
     st.session_state.usando_voz = False
 
-# --- BARRA LATERAL ---
+# --- BARRA LATERAL (Estilo Minimalista Gemini) ---
 with st.sidebar:
-    st.title("⚡ ISAIAS TITAN")
+    st.markdown("### ⚡ ISAIAS TITAN")
     
-    if st.button("➕ Nueva conversación", use_container_width=True):
+    # Botón minimalista de nueva conversación
+    if st.button("✏️ Nueva conversación", use_container_width=True):
         nuevo_id = f"Chat {len(st.session_state.chats) + 1}"
         st.session_state.chats[nuevo_id] = []
         st.session_state.chat_actual = nuevo_id
         st.rerun()
 
-    st.markdown("---")
-    st.markdown("**NAVEGACIÓN**")
+    st.markdown("")
     
-    if st.button("🔍 Buscar conversaciones", use_container_width=True): st.session_state.modo = "🔍 Buscar"
-    if st.button("🎓 Estudiantes", use_container_width=True): st.session_state.modo = "🎓 Estudiantes"
-    if st.button("🖼️ Imágenes", use_container_width=True): st.session_state.modo = "🖼️ Imágenes"
-    if st.button("📚 Biblioteca", use_container_width=True): st.session_state.modo = "📚 Biblioteca"
+    # Menú de navegación plano estilo Gemini
+    if st.button("🔍 Buscar conversaciones", use_container_width=True): 
+        st.session_state.modo = "🔍 Buscar conversaciones"
+    if st.button("🎓 Estudiantes", use_container_width=True): 
+        st.session_state.modo = "🎓 Estudiantes"
+    if st.button("🖼️ Imágenes", use_container_width=True): 
+        st.session_state.modo = "🖼️ Imágenes"
+    if st.button("📚 Biblioteca", use_container_width=True): 
+        st.session_state.modo = "📚 Biblioteca"
 
     st.markdown("---")
-    st.markdown("**CUADERNOS**")
-    if st.button("➕ Nuevo cuaderno", use_container_width=True): pass
+    st.markdown("**Cuadernos**")
+    if st.button("➕ Nuevo cuaderno", use_container_width=True):
+        pass
 
-    st.markdown("---")
-    st.markdown("**Recientes**")
-    for chat_id in st.session_state.chats.keys():
-        if st.button(chat_id, key=f"hist_{chat_id}", use_container_width=True):
-            st.session_state.chat_actual = chat_id
-            st.rerun()
+    fn_recientes = st.expander("Recientes", expanded=True)
+    with fn_recientes:
+        for chat_id in st.session_state.chats.keys():
+            if st.button(chat_id, key=f"hist_{chat_id}", use_container_width=True):
+                st.session_state.chat_actual = chat_id
+                st.rerun()
 
 # --- ÁREA CENTRAL ---
 st.header("⚡ ISAIAS TITAN STUDIO v3.0")
@@ -56,12 +62,10 @@ for msg in st.session_state.chats[st.session_state.chat_actual]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- ZONA DE ENTRADA ESTILO GEMINI ---
-# Creamos una sección inferior organizada
+# --- ZONA DE ENTRADA INFERIOR (Estilo Gemini con Popover y Micrófono) ---
 col_input1, col_input2, col_input3 = st.columns([0.8, 8.4, 0.8])
 
 with col_input1:
-    # Botón "+" con menú desplegable idéntico al de Gemini
     with st.popover("➕", help="Opciones de adjunto y creación"):
         st.markdown("### Opciones de Entrada")
         subir_archivo = st.file_uploader("📁 Subir archivos", type=["pdf", "docx", "pptx", "png", "jpg"])
@@ -78,7 +82,7 @@ with col_input1:
 
 with col_input2:
     placeholders = {
-        "🔍 Buscar": "Pregunta o investiga con TITAN...",
+        "🔍 Buscar conversaciones": "Pregunta o investiga con TITAN...",
         "🎓 Estudiantes": "Pregúntale al tutor académico...",
         "🖼️ Imágenes": "Describe la imagen que deseas generar...",
         "📚 Biblioteca": "Busca dentro de tus archivos..."
@@ -86,7 +90,6 @@ with col_input2:
     prompt = st.chat_input(placeholders.get(st.session_state.modo, "Pregunta a TITAN..."))
 
 with col_input3:
-    # Botón de micrófono a la derecha
     if st.button("🎙️", help="Dictar por voz"):
         st.session_state.usando_voz = not st.session_state.usando_voz
 
