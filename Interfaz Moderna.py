@@ -3,7 +3,7 @@ import streamlit as st
 # Configuración de página
 st.set_page_config(page_title="ISAIAS TITAN STUDIO", layout="wide")
 
-# --- CSS PERSONALIZADO PARA ESTILO PREMIUM ---
+# --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
     [data-testid="stSidebarNav"] {display: none;}
@@ -28,18 +28,7 @@ st.markdown("""
 if "chats" not in st.session_state:
     st.session_state.chats = {
         "Saludo inicial del asistente": [
-            {"role": "assistant", "content": """¡Hola! 👋 ¿En qué puedo ayudarte hoy? Puedo asistirte con muchas cosas, como:
-* 📊 **Crear presentaciones** (PPT)
-* 📄 **Generar currículums** o documentos
-* 🔍 **Investigar** temas en profundidad
-* ✍️ **Escribir artículos** o contenido
-* 📈 **Visualizar datos** o crear gráficos
-* 🖼️ **Generar o editar imágenes**
-* 🎬 **Crear vídeos**
-* 📁 **Convertir archivos** (PDF, Word, Excel, etc.)
-* 🎓 **Apoyo académico** (mapas mentales, flashcards, cuestionarios)
-
-Cuéntame qué necesitas y lo hacemos. 😊"""}
+            {"role": "assistant", "content": "¡Hola! ¿En qué puedo ayudarte hoy?"}
         ]
     }
 if "chat_actual" not in st.session_state:
@@ -49,14 +38,14 @@ if "modo" not in st.session_state:
 
 # --- BARRA LATERAL ---
 with st.sidebar:
-    st.markdown("### ⚡ ISAIAS TITAN AI")
+    st.markdown("### ⚡ ISAIAS TITAN")
     st.markdown("")
     
     if st.button("✏️ Nuevo proyecto"):
         nuevo_id = f"Proyecto {len(st.session_state.chats) + 1}"
         st.session_state.chats[nuevo_id] = []
         st.session_state.chat_actual = nuevo_id
-        st.session_state.modo = "💬 Chat Principal"
+        st.session_state.modo = "💬 Nuevo Proyecto"
         st.rerun()
         
     if st.button("📁 Mis documentos"):
@@ -68,78 +57,87 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.markdown("**Recientes**")
+    st.markdown("**Reciente**")
     
-    for chat_id in st.session_state.chats.keys():
-        if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
-            st.session_state.chat_actual = chat_id
-            st.session_state.modo = "💬 Chat Principal"
-            st.rerun()
-
-    st.markdown("---")
-    # Perfil de usuario abajo
-    st.markdown("👤 **isaiasagramonte4...**")
+    # Mostrar solo chats que NO estén vacíos
+    for chat_id, mensajes in st.session_state.chats.items():
+        if len(mensajes) > 0:
+            if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
+                st.session_state.chat_actual = chat_id
+                st.session_state.modo = "💬 Chat Principal"
+                st.rerun()
 
 # --- ÁREA CENTRAL ---
-st.markdown(f"### {st.session_state.chat_actual}")
-st.markdown("---")
-
 if st.session_state.modo == "📁 Mis documentos":
     st.markdown("### 📁 Mis documentos guardados")
-    st.info("Aquí podrás ver todos los archivos que has subido a tus proyectos.")
+    st.info("Aquí podrás ver todos los archivos que has subido.")
     st.file_uploader("Sube un nuevo archivo", type=["pdf", "docx", "pptx", "png", "jpg"])
 
 elif st.session_state.modo == "🕒 Historial":
     st.markdown("### 🕒 Historial de conversaciones")
-    for chat_id in st.session_state.chats.keys():
-        if st.button(f"Abrir chat: {chat_id}", key=f"hist_{chat_id}"):
-            st.session_state.chat_actual = chat_id
+    for chat_id, mensajes in st.session_state.chats.items():
+        if len(mensajes) > 0:
+            if st.button(f"Abrir chat: {chat_id}", key=f"hist_{chat_id}"):
+                st.session_state.chat_actual = chat_id
+                st.session_state.modo = "💬 Chat Principal"
+                st.rerun()
+
+elif st.session_state.modo == "💬 Nuevo Proyecto" or len(st.session_state.chats.get(st.session_state.chat_actual, [])) == 0:
+    # --- PANTALLA DE BIENVENIDA MODIFICADA ---
+    st.markdown("<h1 style='text-align: center;'>Hola, soy TITAN✨</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>El espacio de trabajo de IA todo en uno que convierte a todos en profesionales</p>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Caja de chat grande central
+    prompt_nuevo = st.chat_input("Pregúntame lo que quieras o asígname una tarea.")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Botones de herramientas inferiores
+    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+    with c1:
+        if st.button("📁\nAgente Pres.", key="btn_pres"):
             st.session_state.modo = "💬 Chat Principal"
             st.rerun()
+    with c2:
+        if st.button("📊\nHojas IA", key="btn_hojas"):
+            pass
+    with c3:
+        if st.button("🖼️\nImagen IA", key="btn_img"):
+            pass
+    with c4:
+        if st.button("🎬\nVideo IA", key="btn_vid"):
+            pass
+    with c5:
+        if st.button("🎨\nDiseño IA", key="btn_dis"):
+            pass
+    with c6:
+        if st.button("✍️\nEscritura", key="btn_esc"):
+            pass
+    with c7:
+        if st.button("➕\nMás", key="btn_mas"):
+            pass
+
+    if prompt_nuevo:
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt_nuevo})
+        st.session_state.modo = "💬 Chat Principal"
+        st.rerun()
 
 else:
-    # Mostrar mensajes del chat actual
+    # Mostrar mensajes del chat actual normal
     for msg in st.session_state.chats[st.session_state.chat_actual]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # --- ZONA DE ENTRADA INFERIOR (Estilo Captura) ---
-    c_clip, c_input = st.columns([0.6, 9.4])
+    # Entrada inferior para chats activos
+    prompt = st.chat_input("¿En qué puedo ayudarte?")
 
-    archivo_cargado = None
-    with c_clip:
-        with st.popover("📎", help="Adjuntar archivos"):
-            st.markdown("### Adjuntar archivo")
-            archivo_cargado = st.file_uploader("Subir documento", type=["pdf", "docx", "pptx", "png", "jpg"], label_visibility="collapsed")
-
-    with c_input:
-        prompt = st.chat_input("¿En qué puedo ayudarte?")
-
-    # --- LÓGICA DE INTELIGENCIA DE TITAN ---
     if prompt:
-        mensaje_usuario = prompt
-        if archivo_cargado:
-            mensaje_usuario = f"[Archivo adjunto: {archivo_cargado.name}]\n\n{prompt}"
-        
-        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": mensaje_usuario})
+        st.session_state.chats[st.session_state.chat_actual].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(mensaje_usuario)
+            st.markdown(prompt)
 
-        texto_lower = prompt.lower()
-        
-        if "creador" in texto_lower or "quién te creó" in texto_lower or "quien te hizo" in texto_lower:
-            respuesta = "😎 Mi creador y mente maestra es **Isaías**. Él me diseñó y programó."
-        elif "presentación" in texto_lower or "ppt" in texto_lower:
-            respuesta = "📊 **[Módulo de Presentaciones]**: He estructurado tu contenido en diapositivas profesionales listas para exportar a PowerPoint."
-        elif "currículum" in texto_lower or "cv" in texto_lower:
-            respuesta = "📄 **[Generador de Currículums]**: He redactado un formato profesional y moderno adaptado a tus requerimientos."
-        elif "video" in texto_lower or "vídeo" in texto_lower:
-            respuesta = "🎬 **[Creador de Vídeos]**: Guion y estructura de vídeo generado con éxito a partir de tu prompt."
-        elif "imagen" in texto_lower or "foto" in texto_lower:
-            respuesta = "🖼️ **[Generador de Imágenes]**: Procesando la descripción visual para generar tu imagen..."
-        else:
-            respuesta = f"🤖 **[TITAN AI]**: He procesado tu solicitud: *'{prompt}'*. ¿Qué más te gustaría que hagamos hoy?"
-
+        respuesta = f"🤖 **[TITAN AI]**: He procesado tu mensaje: *'{prompt}'*."
         st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta})
         with st.chat_message("assistant"):
             st.markdown(respuesta)
