@@ -61,28 +61,29 @@ for msg in st.session_state.chats[st.session_state.chat_actual]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- ZONA DE HERRAMIENTAS INFERIORES (Archivo + Micrófono) ---
-col_herramientas1, col_herramientas2 = st.columns([6, 1])
+# --- BARRA DE ACCESOS DIRECTOS AL LADO DEL CHAT ---
+# Creamos una fila horizontal compacta justo antes de la entrada del chat
+col_btn1, col_btn2, col_vacía = st.columns([1.2, 1, 4])
 
-with col_herramientas1:
-    # Panel para adjuntar archivos (PDF, Word, PPT, etc.)
-    with st.expander("➕ Adjuntar documentos o imágenes (PDF, Word, PPT)", expanded=False):
-        archivo_subido = st.file_uploader(
-            "Sube tus archivos de clase para que el Titán los analice", 
-            type=["pdf", "docx", "pptx", "png", "jpg", "jpeg", "txt"]
-        )
-        if archivo_subido is not None:
-            st.success(f"Archivo cargado: **{archivo_subido.name}**")
+with col_btn1:
+    # Usamos un file_uploader minimalista para simular el botón de adjuntar
+    archivo_subido = st.file_uploader(
+        "➕ Adjuntar", 
+        type=["pdf", "docx", "pptx", "png", "jpg", "jpeg", "txt"],
+        label_visibility="collapsed"
+    )
 
-with col_herramientas2:
-    # Botón de Micrófono simulado / activo
-    if st.button("🎙️ Dictar", use_container_width=True, help="Activar entrada por voz"):
+with col_btn2:
+    if st.button("🎙️ Dictar", use_container_width=True):
         st.session_state.usando_voz = not st.session_state.usando_voz
 
 if st.session_state.usando_voz:
-    st.info("🎙️ [Modo Voz Activo]: Habla ahora. (Simulando transcripción de audio a texto...)")
+    st.info("🎙️ [Micrófono Activo]: Escuchando y transcribiendo...")
 
-# Entrada de texto del chat
+if archivo_subido is not None:
+    st.success(f"📎 Archivo listo: **{archivo_subido.name}**")
+
+# Entrada de texto del chat (Abajo del todo)
 placeholders = {
     "🔍 Buscar": "¿Qué deseas buscar o investigar hoy?",
     "🎓 Estudiantes": "Pregúntale al tutor académico...",
@@ -100,6 +101,6 @@ if prompt := st.chat_input(placeholders.get(st.session_state.modo, "Pregunta a T
         st.markdown(mensaje_final)
 
     with st.chat_message("assistant"):
-        respuesta = f"🤖 [TITAN Pro]: Analizando tu consulta y archivos..."
+        respuesta = f"🤖 [TITAN Pro]: Procesando tu solicitud..."
         st.markdown(respuesta)
         st.session_state.chats[st.session_state.chat_actual].append({"role": "assistant", "content": respuesta})
