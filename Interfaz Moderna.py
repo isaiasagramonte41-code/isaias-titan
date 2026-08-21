@@ -53,27 +53,24 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Reciente**")
     
-    # Listar chats recientes con opción rápida de eliminar
-    chats_a_borrar = None
+    # Listar chats recientes con menú flotante limpio (estilo 3 puntos)
     for chat_id, mensajes in list(st.session_state.chats.items()):
         if len(mensajes) > 0:
-            c_col1, c_col2 = st.columns([0.8, 0.2])
-            with c_col1:
+            c1, c2 = st.columns([0.8, 0.2])
+            with c1:
                 if st.button(f"💬 {chat_id}", key=f"rec_{chat_id}"):
                     st.session_state.chat_actual = chat_id
                     st.session_state.modo = "💬 Chat Activo"
                     st.rerun()
-            with c_col2:
-                if st.button("🗑️", key=f"del_rec_{chat_id}", help="Eliminar chat"):
-                    chats_a_borrar = chat_id
-
-    # Lógica para borrar desde la barra lateral
-    if chats_a_borrar:
-        del st.session_state.chats[chats_a_borrar]
-        if st.session_state.chat_actual == chats_a_borrar:
-            st.session_state.chat_actual = None
-            st.session_state.modo = "💬 Nuevo Proyecto"
-        st.rerun()
+            with c2:
+                # Menú flotante (popover) de tres puntos para opciones ocultas
+                with st.popover("⋮", help="Opciones"):
+                    if st.button("🗑️ Eliminar chat", key=f"del_pop_{chat_id}"):
+                        del st.session_state.chats[chat_id]
+                        if st.session_state.chat_actual == chat_id:
+                            st.session_state.chat_actual = None
+                            st.session_state.modo = "💬 Nuevo Proyecto"
+                        st.rerun()
 
 # --- ÁREA CENTRAL ---
 if st.session_state.modo == "📁 Mis documentos":
@@ -92,12 +89,13 @@ elif st.session_state.modo == "🕒 Historial":
                     st.session_state.modo = "💬 Chat Activo"
                     st.rerun()
             with col_h2:
-                if st.button("🗑️", key=f"del_hist_{chat_id}"):
-                    del st.session_state.chats[chat_id]
-                    if st.session_state.chat_actual == chat_id:
-                        st.session_state.chat_actual = None
-                        st.session_state.modo = "💬 Nuevo Proyecto"
-                    st.rerun()
+                with st.popover("⋮"):
+                    if st.button("🗑️ Eliminar", key=f"del_hist_pop_{chat_id}"):
+                        del st.session_state.chats[chat_id]
+                        if st.session_state.chat_actual == chat_id:
+                            st.session_state.chat_actual = None
+                            st.session_state.modo = "💬 Nuevo Proyecto"
+                        st.rerun()
 
 elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuevo Proyecto":
     # --- PANTALLA DE BIENVENIDA ---
@@ -156,16 +154,18 @@ elif st.session_state.chat_actual is None or st.session_state.modo == "💬 Nuev
         st.rerun()
 
 else:
-    # --- VISTA DE CONVERSACIÓN ACTIVA CON BOTÓN DE BORRAR ---
+    # --- VISTA DE CONVERSACIÓN ACTIVA ---
     col_t1, col_t2 = st.columns([8, 2])
     with col_t1:
         st.markdown(f"### {st.session_state.chat_actual}")
     with col_t2:
-        if st.button("🗑️ Borrar chat", use_container_width=True):
-            del st.session_state.chats[st.session_state.chat_actual]
-            st.session_state.chat_actual = None
-            st.session_state.modo = "💬 Nuevo Proyecto"
-            st.rerun()
+        # Menú de tres puntos también arriba en el chat activo para borrar
+        with st.popover("⋮ Opciones", use_container_width=True):
+            if st.button("🗑️ Eliminar este chat", key="del_chat_activo"):
+                del st.session_state.chats[st.session_state.chat_actual]
+                st.session_state.chat_actual = None
+                st.session_state.modo = "💬 Nuevo Proyecto"
+                st.rerun()
 
     st.markdown("---")
 
