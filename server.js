@@ -1,15 +1,19 @@
 const express = require('express');
 const app = express();
 const path = require('path');
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Esto le dice a Express que busque archivos estáticos en la carpeta raíz (o donde tengas tu HTML)
+// Si tu index.html está en la raíz de tu proyecto (fuera de cualquier carpeta), usa esto:
 app.use(express.static(path.join(__dirname)));
 
-// Ruta principal que carga tu archivo de interfaz (ajusta 'index.html' si tu archivo se llama diferente)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// Nota: Si por el contrario, tu index.html está metido dentro de una carpeta llamada "src",
+// cambia las dos líneas de arriba por estas:
+// app.use(express.static(path.join(__dirname, 'src')));
+// res.sendFile(path.join(__dirname, 'src', 'index.html'));
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
