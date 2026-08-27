@@ -1,0 +1,24 @@
+# Flutter / Build directories
+flutter/ephemeral/
+build/
+.dart_tool/
+
+# Environment variables & Secrets
+.env
+
+# Node.js
+node_modules/
+
+# Visual Studio user-specific files.
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio build-related files.
+x64/
+x86/
+
+# Visual Studio cache files
+*.[Cc]ache
+!*.[Cc]ache/
