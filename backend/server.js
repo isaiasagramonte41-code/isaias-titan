@@ -1,19 +1,42 @@
 const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+const { GoogleGenAI } = require('@google/genai');
+
 const app = express();
-const path = require('path');
+app.use(cors());
+app.use(express.json());
+
 const PORT = process.env.PORT || 10000;
 
-// Si tu index.html está en la raíz de tu proyecto (fuera de cualquier carpeta), usa esto:
-app.use(express.static(path.join(__dirname)));
+// Inicializa el cliente de la API de Gemini utilizando la variable de entorno
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Ruta principal para que el navegador no dé "Not Found"
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.send('¡Isaías Titan Backend está activo y funcionando perfectamente! 🚀');
 });
 
-// Nota: Si por el contrario, tu index.html está metido dentro de una carpeta llamada "src",
-// cambia las dos líneas de arriba por estas:
-// app.use(express.static(path.join(__dirname, 'src')));
-// res.sendFile(path.join(__dirname, 'src', 'index.html'));
+// Ruta que llamará tu aplicación de Flutter para hablar con la IA
+app.post('/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'El mensaje es obligatorio' });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: message,
+    });
+
+    res.json({ reply: response.text });
+  } catch (error) {
+    console.error('Error al conectar con Gemini:', error);
+    res.status(500).json({ error: 'Error interno en el servidor del backend' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
