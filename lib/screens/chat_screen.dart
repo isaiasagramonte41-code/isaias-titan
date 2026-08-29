@@ -31,12 +31,12 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await http.post(
         Uri.parse(_backendUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'prompt': userMessage}),
+        body: jsonEncode({'message': userMessage}),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final botMessage = data['response'] ?? 'Respuesta vacía del servidor';
+        final botMessage = data['reply'] ?? 'Respuesta vacía del servidor';
         setState(() {
           _messages.add({'sender': 'bot', 'message': botMessage});
         });
@@ -100,17 +100,32 @@ class _ChatScreenState extends State<ChatScreen> {
             color: Colors.white,
             child: Row(
               children: [
+                // Botón de más (+) para adjuntar
+                IconButton(
+                  icon: const Icon(Icons.add, color: Colors.grey),
+                  onPressed: () {
+                    // Lógica para adjuntar archivos o imágenes
+                  },
+                ),
                 Expanded(
                   child: TextField(
                     controller: _controller,
                     decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje...',
+                      hintText: 'Investiga algo o crea una serie...',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8.0),
+                // Botón de micrófono
+                IconButton(
+                  icon: const Icon(Icons.mic, color: Colors.grey),
+                  onPressed: () {
+                    // Lógica de audio/whisper
+                  },
+                ),
+                // Botón de enviar
                 IconButton(
                   icon: const Icon(Icons.send, color: Colors.indigo),
                   onPressed: _sendMessage,
