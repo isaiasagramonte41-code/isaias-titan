@@ -1,11 +1,11 @@
 import os
 import requests
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # 1. Importado para resolver el problema de CORS en Flutter Web
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 app = Flask(__name__)
-CORS(app)  # 2. Activado para permitir peticiones desde tu app web
+CORS(app)
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -20,20 +20,22 @@ def index():
         "mensaje": "Servidor Flask funcionando en la nube con Groq."
     })
 
-@app.route('/chat', methods=['POST'])  # 3. Cambiado a /chat para coincidir exactamente con tu frontend
+@app.route('/chat', methods=['POST'])
 def chat():
     try:
-        data = request.get_json(silent=True)
+        data = request.get_json(silent=True, force=True)
         if not data:
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
-        mensaje_original = data.get("mensaje", "").strip()
+        mensaje_original = data.get("mensaje") or data.get("prompt", "")
+        mensaje_original = str(mensaje_original).strip()
         mensaje_lower = mensaje_original.lower()
         
         if not mensaje_original:
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
-        if any(palabra in mensaje_lower for palabra in ["serie", "video", "película", "crea", "hacer"]):
+        # Solo activa video si la intención de crear video es clara, evitando falsos positivos
+        if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
             if not KLING_API_KEY and not RUNWAY_API_KEY:
                 return jsonify({
                     "exito": True,
