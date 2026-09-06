@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:video_player/video_player.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,19 +9,18 @@ import 'dart:convert';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 
 // --- Gestor Central de API Keys con versiones funcionales ---
 class TitanApiManager {
-  static String get geminiKey => dotenv.env['ISAIAS_API_KEY'] ?? '';
-  static String get klingKey => dotenv.env['KLING_API_KEY'] ?? '';
-  static String get runwayKey => dotenv.env['RUNWAY_API_KEY'] ?? '';
+  // Como el backend en Render maneja la seguridad de forma nativa, definimos rutas o respaldos seguros
+  static String get geminiKey => '';
+  static String get klingKey => '';
+  static String get runwayKey => '';
 
   // Conexión para generar contenido mediante Kling AI (Versión v1 oficial)
   static Future<String> generarVideoKling(String prompt) async {
-    if (klingKey.isEmpty) return "Error: Falta KLING_API_KEY en .env";
     try {
       final response = await http.post(
         Uri.parse('https://api.klingai.com/v1/videos/text2video'),
@@ -48,7 +45,6 @@ class TitanApiManager {
 
   // Conexión para generar videos mediante Runway Gen-3 (Versión gen3a_turbo)
   static Future<String> generarVideoRunway(String prompt) async {
-    if (runwayKey.isEmpty) return "Error: Falta RUNWAY_API_KEY en .env";
     try {
       final response = await http.post(
         Uri.parse('https://api.dev.runwayml.com/v1/image_to_video'),
@@ -748,8 +744,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Uint8List? _bytesArchivoSeleccionado;
   String? _tipoArchivoSeleccionado;
 
-  late GenerativeModel _model;
-
   late stt.SpeechToText _speech;
   bool _isListening = false;
   bool _speechAvailable = false;
@@ -763,7 +757,6 @@ class _ChatScreenState extends State<ChatScreen> {
         isUser: false,
       )
     ];
-    _inicializarIA();
     _initSpeech();
   }
 
@@ -822,17 +815,6 @@ class _ChatScreenState extends State<ChatScreen> {
         curve: Curves.easeOut,
       );
     }
-  }
-
-  void _inicializarIA() {
-    final apiKey = TitanApiManager.geminiKey;
-    _model = GenerativeModel(
-      model: 'gemini-3.6-flash', // <--- Tu versión restaurada y funcional
-      apiKey: apiKey,
-      systemInstruction: Content.text(
-        "Eres TITÁN, un asistente de inteligencia artificial avanzada. Al redactar tus respuestas, NO utilices símbolos de asteriscos ni marcas de formato Markdown (como **, *, ###). Presenta el texto siempre limpio, ordenado y formateado mediante párrafos claros o guiones sencillos."
-      ),
-    );
   }
 
   String _limpiarTextoMarkdown(String texto) {
@@ -944,22 +926,21 @@ class _ChatScreenState extends State<ChatScreen> {
     Future.delayed(const Duration(milliseconds: 100), _irAlFinalDelChat);
 
     try {
-      dynamic content;
-      if (bytesActuales != null && (tipoActual == 'image' || tipoActual == 'file')) {
-        final ext = archivoActual?.extension ?? 'png';
-        content = [
-          Content.multi([
-            TextPart(textoPregunta),
-            DataPart('image/$ext', bytesActuales),
-          ])
-        ];
-      } else {
-        content = [Content.text(textoPregunta)];
-      }
+      // Conexión hacia el backend centralizado en Render
+      final response = await http.post(
+        Uri.parse('https://isaias-titan.onrender.com/chat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'message': textoPregunta}),
+      );
 
-      final response = await _model.generateContent(content);
-      final respuestaCruda = response.text ?? "Análisis completado con éxito.";
-      final respuestaLimpia = _limpiarTextoMarkdown(respuestaCruda);
+      String respuestaLimpia = "Respuesta recibida.";
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final respuestaCruda = data['response'] ?? data['reply'] ?? "Sin respuesta del servidor.";
+        respuestaLimpia = _limpiarTextoMarkdown(respuestaCruda);
+      } else {
+        respuestaLimpia = "Error en el servidor (${response.statusCode}): No se pudo procesar la solicitud.";
+      }
 
       setState(() {
         _messages.add(ChatMessage(text: respuestaLimpia, isUser: false));
@@ -969,7 +950,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     } catch (e) {
       setState(() {
-        _messages.add(ChatMessage(text: "Error de procesamiento: Verifique su API Key en el archivo .env ($e)", isUser: false));
+        _messages.add(ChatMessage(text: "Error de conexión con el backend en la nube: $e", isUser: false));
       });
     } finally {
       setState(() { _isLoading = false; });

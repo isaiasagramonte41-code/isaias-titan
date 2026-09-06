@@ -1,9 +1,11 @@
 import os
 import requests
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # 1. Importado para resolver el problema de CORS en Flutter Web
 from dotenv import load_dotenv
 
 app = Flask(__name__)
+CORS(app)  # 2. Activado para permitir peticiones desde tu app web
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -18,10 +20,10 @@ def index():
         "mensaje": "Servidor Flask funcionando en la nube con Groq."
     })
 
-@app.route('/v1/chat', methods=['POST'])
+@app.route('/chat', methods=['POST'])  # 3. Cambiado a /chat para coincidir exactamente con tu frontend
 def chat():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
@@ -59,7 +61,7 @@ def chat():
         }
         
         payload = {
-            "model": "llama3-70b-8192",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
                 {
                     "role": "system",

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GeminiService {
-  // Apunta exactamente a la ruta configurada en tu Flask de Render
-  final String _backendUrl = 'https://isaias-titan.onrender.com/v1/chat';
+  // Corregido: Apunta directamente a la ruta /chat de tu Flask en Render
+  final String _backendUrl = 'https://isaias-titan.onrender.com/chat';
 
   Future<Map<String, dynamic>> generateResponse(String prompt) async {
     try {
@@ -13,14 +13,13 @@ class GeminiService {
           "Content-Type": "application/json",
         },
         body: jsonEncode({
-          "mensaje": prompt, // Corregido para coincidir con Flask ("mensaje")
+          "mensaje": prompt,
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
-        // Devolvemos todo el mapa JSON para que la interfaz sepa si hay video o texto
         return {
           "exito": data["exito"] ?? true,
           "es_video": data["es_video"] ?? false,
