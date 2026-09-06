@@ -8,7 +8,8 @@ app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Cambiamos a la clave de OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 KLING_API_KEY = os.getenv("KLING_API_KEY")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 
@@ -17,31 +18,23 @@ def index():
     return jsonify({
         "estado": "ACTIVO",
         "sistema": "TITÁN Core",
-        "mensaje": "Servidor Flask funcionando en la nube con Groq."
+        "mensaje": "Servidor Flask funcionando en la nube con OpenAI."
     })
 
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
         print("--- NUEVA PETICIÓN RECIBIDA ---")
-        print("Headers:", dict(request.headers))
-        print("Raw Data:", request.data)
-        
         data = request.get_json(silent=True, force=True)
-        print("JSON parseado:", data)
 
         if not data:
-            print("Error: No se pudieron parsear datos JSON")
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
         mensaje_original = data.get("mensaje") or data.get("prompt") or data.get("message", "")
         mensaje_original = str(mensaje_original).strip()
         mensaje_lower = mensaje_original.lower()
-        
-        print("Mensaje extraído:", mensaje_original)
 
         if not mensaje_original:
-            print("Error: El mensaje está vacío")
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
         if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
@@ -60,21 +53,20 @@ def chat():
                     "respuesta": f"🎥 Aquí tienes tu producción generada para: \"{mensaje_original.capitalize()}\"."
                 })
         
-        if not GROQ_API_KEY:
-            print("Error: Falta GROQ_API_KEY en el servidor")
+        if not OPENAI_API_KEY:
             return jsonify({
                 "exito": False, 
-                "error": "Falta configurar la GROQ_API_KEY en las variables de entorno de Render."
+                "error": "Falta configurar la OPENAI_API_KEY en las variables de entorno de Render."
             }), 500
 
         headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json"
         }
         
-        # Modelo oficial y compatible con Groq
+        # Estructura oficial para OpenAI con gpt-4o-mini
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "gpt-4o-mini",
             "messages": [
                 {
                     "role": "system",
@@ -92,8 +84,9 @@ def chat():
             "temperature": 0.7
         }
 
+        # Endpoint oficial de OpenAI
         response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
+            "https://api.openai.com/v1/chat/completions",
             json=payload,
             headers=headers,
             timeout=30
@@ -110,7 +103,7 @@ def chat():
                 "respuesta": bot_reply
             })
         else:
-            print("Error de Groq API:", response.text)
+            print("Error de OpenAI API:", response.text)
             return jsonify({
                 "exito": False, 
                 "error": f"Error en el motor de IA externo: {response.text}"
