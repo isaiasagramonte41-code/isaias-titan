@@ -72,9 +72,9 @@ def chat():
             "Content-Type": "application/json"
         }
         
-        # Modelo actualizado al estándar actual compatible con Groq
+        # Modelo oficial y compatible con Groq
         payload = {
-            "model": "openai/gpt-oss-120b",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
                 {
                     "role": "system",
