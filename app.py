@@ -34,7 +34,6 @@ def chat():
             print("Error: No se pudieron parsear datos JSON")
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
-        # Corrección aplicada aquí para aceptar mensaje, prompt o message
         mensaje_original = data.get("mensaje") or data.get("prompt") or data.get("message", "")
         mensaje_original = str(mensaje_original).strip()
         mensaje_lower = mensaje_original.lower()
