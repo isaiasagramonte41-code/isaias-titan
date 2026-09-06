@@ -23,18 +23,28 @@ def index():
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
+        # Depuración para ver qué llega exactamente desde Flutter
+        print("--- NUEVA PETICIÓN RECIBIDA ---")
+        print("Headers:", dict(request.headers))
+        print("Raw Data:", request.data)
+        
         data = request.get_json(silent=True, force=True)
+        print("JSON parseado:", data)
+
         if not data:
+            print("Error: No se pudieron parsear datos JSON")
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
         mensaje_original = data.get("mensaje") or data.get("prompt", "")
         mensaje_original = str(mensaje_original).strip()
         mensaje_lower = mensaje_original.lower()
         
+        print("Mensaje extraído:", mensaje_original)
+
         if not mensaje_original:
+            print("Error: El mensaje está vacío")
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
-        # Solo activa video si la intención de crear video es clara, evitando falsos positivos
         if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
             if not KLING_API_KEY and not RUNWAY_API_KEY:
                 return jsonify({
@@ -52,6 +62,7 @@ def chat():
                 })
         
         if not GROQ_API_KEY:
+            print("Error: Falta GROQ_API_KEY en el servidor")
             return jsonify({
                 "exito": False, 
                 "error": "Falta configurar la GROQ_API_KEY en las variables de entorno de Render."
@@ -99,12 +110,14 @@ def chat():
                 "respuesta": bot_reply
             })
         else:
+            print("Error de Groq API:", response.text)
             return jsonify({
                 "exito": False, 
                 "error": f"Error en el motor de IA externo: {response.text}"
             }), 500
         
     except Exception as e:
+        print("Excepción interna en Flask:", str(e))
         return jsonify({"exito": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
