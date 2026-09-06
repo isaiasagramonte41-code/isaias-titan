@@ -23,7 +23,6 @@ def index():
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
-        # Depuración para ver qué llega exactamente desde Flutter
         print("--- NUEVA PETICIÓN RECIBIDA ---")
         print("Headers:", dict(request.headers))
         print("Raw Data:", request.data)
@@ -35,7 +34,8 @@ def chat():
             print("Error: No se pudieron parsear datos JSON")
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
-        mensaje_original = data.get("mensaje") or data.get("prompt", "")
+        # Corrección aplicada aquí para aceptar mensaje, prompt o message
+        mensaje_original = data.get("mensaje") or data.get("prompt") or data.get("message", "")
         mensaje_original = str(mensaje_original).strip()
         mensaje_lower = mensaje_original.lower()
         
