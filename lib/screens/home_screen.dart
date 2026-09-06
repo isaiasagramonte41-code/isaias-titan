@@ -168,8 +168,7 @@ class BienvenidaTitanScreen extends StatefulWidget {
   });
 
   @override
-  State<BienvenidaTitanScreen> createState() =>
-      _BienvenidaTitanScreenState();
+  State<BienvenidaTitanScreen> createState() => _BienvenidaTitanScreenState();
 }
 
 class _BienvenidaTitanScreenState extends State<BienvenidaTitanScreen> {

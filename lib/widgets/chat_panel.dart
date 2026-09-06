@@ -13,7 +13,6 @@ class ChatPanel extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-
               const Text(
                 "ISAIAS TITAN",
                 style: TextStyle(
@@ -29,9 +28,7 @@ class ChatPanel extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 15),
-
               const Text(
                 "Sistema de Asistente personal",
                 style: TextStyle(
@@ -39,9 +36,7 @@ class ChatPanel extends StatelessWidget {
                   fontSize: 20,
                 ),
               ),
-
               const SizedBox(height: 35),
-
               Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
@@ -53,7 +48,6 @@ class ChatPanel extends StatelessWidget {
                 ),
                 child: const Column(
                   children: [
-
                     Text(
                       "Hola, soy ISAIAS TITAN",
                       style: TextStyle(
@@ -62,9 +56,7 @@ class ChatPanel extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     SizedBox(height: 15),
-
                     Text(
                       "¿Como te puedo ayudar hoy?",
                       textAlign: TextAlign.center,
@@ -76,33 +68,27 @@ class ChatPanel extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 45),
-
-              Wrap(
+              const Wrap(
                 spacing: 20,
                 runSpacing: 20,
                 alignment: WrapAlignment.center,
                 children: [
-
                   FeatureCard(
                     icono: Icons.search,
                     titulo: "Investigación",
                     descripcion: "Buscar información usando TITAN y Ollama.",
                   ),
-
                   FeatureCard(
                     icono: Icons.analytics,
                     titulo: "Análisis",
                     descripcion: "Analizar documentos, textos y datos.",
                   ),
-
                   FeatureCard(
                     icono: Icons.rocket_launch,
                     titulo: "Proyectos",
                     descripcion: "Crear aplicaciones, webs y sistemas.",
                   ),
-
                   FeatureCard(
                     icono: Icons.support_agent,
                     titulo: "Asistencia",

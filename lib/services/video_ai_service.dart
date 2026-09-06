@@ -1,50 +1,60 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class VideoAIService {
-  // Método genérico para generar video
-  Future<Map<String, dynamic>?> generarVideo(String prompt) async {
-    final apiKey = dotenv.env['RUNWAY_API_KEY'] ?? dotenv.env['GEMINI_API_KEY'] ?? '';
-    final url = Uri.parse('https://api.runwayml.com/v1/tasks');
+  // Apunta directamente a tu backend en Flask (Render)
+  final String _backendUrl = 'https://isaias-titan.onrender.com/v1/chat';
 
+  // Método genérico para enviar la solicitud de video a tu servidor
+  Future<Map<String, dynamic>?> generarVideo(String prompt) async {
     try {
       final response = await http.post(
-        url,
+        Uri.parse(_backendUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-          'X-Runway-Version': '2024-11-06',
         },
         body: jsonEncode({
-          'promptText': prompt,
-          'model': 'gen3a_turbo',
-          'ratio': '1280:768',
+          'mensaje': prompt, // Usamos la misma llave que Flask espera
         }),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Devolvemos el JSON que ya trae el es_video y video_url configurados en Flask
+        return {
+          'id': 'server_task_${DateTime.now().millisecondsSinceEpoch}',
+          'status': 'COMPLETED',
+          'es_video': data['es_video'] ?? false,
+          'video_url': data['video_url'] ?? '',
+          'respuesta': data['respuesta'] ?? '',
+        };
       } else {
         return {
           'id': 'sim_task_${DateTime.now().millisecondsSinceEpoch}',
-          'status': 'PENDING'
+          'status': 'PENDING',
+          'es_video': false,
+          'video_url': '',
+          'respuesta': '⚠️ Error en el servidor de video.',
         };
       }
     } catch (e) {
       return {
         'id': 'sim_task_${DateTime.now().millisecondsSinceEpoch}',
-        'status': 'PENDING'
+        'status': 'PENDING',
+        'es_video': false,
+        'video_url': '',
+        'respuesta': '⚠️ Error de conexión al generar el video: $e',
       };
     }
   }
 
-  // Método específico que reclama tu home_screen.dart
+  // Método específico requerido por tu pantalla
   Future<String?> generarVideoRealista(String prompt) async {
     final resultado = await generarVideo(prompt);
-    if (resultado != null && resultado.containsKey('id')) {
-      return resultado['id'].toString();
+    if (resultado != null && resultado.containsKey('video_url') && resultado['es_video'] == true) {
+      // Retorna la URL del MP4 para que la UI la pueda leer directamente
+      return resultado['video_url'].toString();
     }
-    return 'sim_task_${DateTime.now().millisecondsSinceEpoch}';
+    return null;
   }
 }

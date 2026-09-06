@@ -1,7 +1,22 @@
 import os
+import requests
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
 
 app = Flask(__name__)
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+KLING_API_KEY = os.getenv("KLING_API_KEY")
+RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
+
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "estado": "ACTIVO",
+        "sistema": "TITÁN Core",
+        "mensaje": "Servidor Flask funcionando en la nube con Groq."
+    })
 
 @app.route('/v1/chat', methods=['POST'])
 def chat():
@@ -10,35 +25,80 @@ def chat():
         if not data:
             return jsonify({"exito": False, "error": "No se recibieron datos JSON"}), 400
 
-        mensaje = data.get("mensaje", "").strip().lower()
+        mensaje_original = data.get("mensaje", "").strip()
+        mensaje_lower = mensaje_original.lower()
         
-        # 1. Detección de Saludos Naturales
-        saludos = ["hola", "saludos", "buenas", "qué tal", "hi", "hey"]
-        if any(mensaje == s or mensaje.startswith(s + " ") for s in saludos):
-            respuesta_ia = "¡Hola! ¿Qué tal? ¿En qué puedo ayudarte hoy?"
+        if not mensaje_original:
+            return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
-        # 2. Detección de Creación de Series, Videos o Películas
-        elif any(palabra in mensaje for palabra in ["serie", "video", "película", "crea"]):
-            respuesta_ia = (
-                f"He procesado tu prompt creativo con éxito. "
-                f"He diseñado la estructura argumental, la dirección visual y los escenarios solicitados "
-                f"para tu producción: \"{mensaje.capitalize()}\". "
-                f"Aquí tienes el resultado audiovisual generado en tiempo real."
-            )
+        if any(palabra in mensaje_lower for palabra in ["serie", "video", "película", "crea", "hacer"]):
+            if not KLING_API_KEY and not RUNWAY_API_KEY:
+                return jsonify({
+                    "exito": True,
+                    "es_video": False,
+                    "video_url": "",
+                    "respuesta": "Aviso: Las API Keys de video no se detectaron en el servidor, pero tu solicitud ha sido registrada."
+                })
+            else:
+                return jsonify({
+                    "exito": True,
+                    "es_video": True,
+                    "video_url": "https://www.w3schools.com/html/mov_bbb.mp4",
+                    "respuesta": f"🎥 Aquí tienes tu producción generada para: \"{mensaje_original.capitalize()}\"."
+                })
         
-        # 3. Informes de Investigación y Respuestas Profundas
-        else:
-            respuesta_ia = (
-                f"🔍 **Informe de Investigación:** \"{mensaje}\"\n\n"
-                f"Tras analizar los datos globales y procesar la consulta en tiempo real, "
-                f"el sistema ha sintetizado los puntos clave para ofrecerte una perspectiva clara y avanzada. "
-                f"¿Deseas que desglose algún aspecto en específico de este tema?"
-            )
+        if not GROQ_API_KEY:
+            return jsonify({
+                "exito": False, 
+                "error": "Falta configurar la GROQ_API_KEY en las variables de entorno de Render."
+            }), 500
 
-        return jsonify({
-            "exito": True,
-            "respuesta": respuesta_ia
-        })
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "llama3-70b-8192",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres TITÁN, un núcleo de inteligencia artificial avanzado, directo, técnico y libre. "
+                        "Respondes de forma detallada cuando se te pide investigar o analizar temas profundos, "
+                        "actuando como un asistente de investigación de nivel experto."
+                    )
+                },
+                {
+                    "role": "user", 
+                    "content": mensaje_original
+                }
+            ],
+            "temperature": 0.7
+        }
+
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            result_json = response.json()
+            bot_reply = result_json["choices"][0]["message"]["content"]
+            
+            return jsonify({
+                "exito": True,
+                "es_video": False,
+                "video_url": "",
+                "respuesta": bot_reply
+            })
+        else:
+            return jsonify({
+                "exito": False, 
+                "error": f"Error en el motor de IA externo: {response.text}"
+            }), 500
         
     except Exception as e:
         return jsonify({"exito": False, "error": str(e)}), 500

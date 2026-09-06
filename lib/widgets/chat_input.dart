@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
-
 class ChatInput extends StatefulWidget {
   final Function(String) onSend;
+  final Function(String)? onInvestigacionVoz;
 
   const ChatInput({
     super.key,
     required this.onSend,
+    this.onInvestigacionVoz,
   });
 
   @override
@@ -14,21 +14,89 @@ class ChatInput extends StatefulWidget {
 
 class _ChatInputState extends State<ChatInput> {
   final TextEditingController controller = TextEditingController();
+  bool _isListening = false;
 
   void enviarMensaje() {
     final texto = controller.text.trim();
-
     if (texto.isEmpty) return;
-
     widget.onSend(texto);
-
     controller.clear();
+  }
+
+  // Menú flotante del botón "+" (Subir archivo, Cámara, Crear imágenes)
+  void _mostrarMenuMas(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF151A22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Colors.cyanAccent, width: 0.5),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.upload_file, color: Colors.cyanAccent),
+                title: const Text('Subir archivo', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Conecta aquí tu selector de archivos
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.cyanAccent),
+                title: const Text('Cámara', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Conecta aquí tu lógica de cámara
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.image, color: Colors.cyanAccent),
+                title: const Text('Crear imágenes', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Conecta aquí tu generador de imágenes de la IA
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Micrófono: Lo que hablas se escribe en el input y se manda directo a investigación
+  void _manejarMic_Investigacion() {
+    setState(() {
+      _isListening = !_isListening;
+    });
+
+    if (_isListening) {
+      // Aquí activas tu escucha (por ejemplo, speech_to_text)
+      // Simulación de texto hablado para prueba rápida:
+      controller.text = "Investigar sobre las últimas tendencias de IA";
+    } else {
+      // Al terminar de hablar, se envía directo
+      if (controller.text.isNotEmpty) {
+        final textoFinal = controller.text;
+        controller.clear();
+        if (widget.onInvestigacionVoz != null) {
+          widget.onInvestigacionVoz!(textoFinal);
+        } else {
+          widget.onSend(textoFinal);
+        }
+      }
+    }
   }
 
   Widget botonIcono({
     required IconData icono,
     required String tooltip,
     required VoidCallback onPressed,
+    Color color = Colors.cyanAccent,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -37,7 +105,7 @@ class _ChatInputState extends State<ChatInput> {
         onPressed: onPressed,
         icon: Icon(
           icono,
-          color: Colors.cyanAccent,
+          color: color,
           size: 24,
         ),
       ),
@@ -68,23 +136,19 @@ class _ChatInputState extends State<ChatInput> {
       ),
       child: Row(
         children: [
-
+          // Botón "+" con el menú desplegable (Subir archivo, Cámara, Crear imágenes)
           botonIcono(
-            icono: Icons.attach_file,
-            tooltip: "Adjuntar archivo",
-            onPressed: () {},
+            icono: Icons.add_circle_outline,
+            tooltip: "Opciones (Archivo, Cámara, Imágenes)",
+            onPressed: () => _mostrarMenuMas(context),
           ),
 
+          // Botón de Micrófono conectado directo a investigación
           botonIcono(
-            icono: Icons.image,
-            tooltip: "Analizar imagen",
-            onPressed: () {},
-          ),
-
-          botonIcono(
-            icono: Icons.mic,
-            tooltip: "Hablar con TITAN",
-            onPressed: () {},
+            icono: _isListening ? Icons.mic : Icons.mic_none,
+            tooltip: "Hablar para investigación directa",
+            color: _isListening ? Colors.redAccent : Colors.cyanAccent,
+            onPressed: _manejarMic_Investigacion,
           ),
 
           botonIcono(
@@ -103,7 +167,7 @@ class _ChatInputState extends State<ChatInput> {
                 fontSize: 16,
               ),
               decoration: InputDecoration(
-                hintText: "Pregunta lo que quieras a ISAIAS TITAN...",
+                hintText: _isListening ? "Escuchando investigación..." : "Pregunta lo que quieras a ISAIAS TITAN...",
                 hintStyle: const TextStyle(
                   color: Colors.white54,
                 ),

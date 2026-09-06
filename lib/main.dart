@@ -1,56 +1,132 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:video_player/video_player.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-import 'services/video_ai_service.dart';
-
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  runApp(const TitanApp());
+  runApp(const MyApp());
 }
 
-class TitanApp extends StatelessWidget {
-  const TitanApp({super.key});
+// --- Gestor Central de API Keys con versiones funcionales ---
+class TitanApiManager {
+  static String get geminiKey => dotenv.env['ISAIAS_API_KEY'] ?? '';
+  static String get klingKey => dotenv.env['KLING_API_KEY'] ?? '';
+  static String get runwayKey => dotenv.env['RUNWAY_API_KEY'] ?? '';
+
+  // Conexión para generar contenido mediante Kling AI (Versión v1 oficial)
+  static Future<String> generarVideoKling(String prompt) async {
+    if (klingKey.isEmpty) return "Error: Falta KLING_API_KEY en .env";
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.klingai.com/v1/videos/text2video'),
+        headers: {
+          'Authorization': 'Bearer $klingKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'prompt': prompt,
+          'model_name': 'kling-v1',
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data']['video_url'] ?? '';
+      }
+      return "Error en la respuesta de Kling: ${response.statusCode}";
+    } catch (e) {
+      return "Excepción conectando con Kling: $e";
+    }
+  }
+
+  // Conexión para generar videos mediante Runway Gen-3 (Versión gen3a_turbo)
+  static Future<String> generarVideoRunway(String prompt) async {
+    if (runwayKey.isEmpty) return "Error: Falta RUNWAY_API_KEY en .env";
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.dev.runwayml.com/v1/image_to_video'),
+        headers: {
+          'Authorization': 'Bearer $runwayKey',
+          'Content-Type': 'application/json',
+          'X-Runway-Version': '2024-11-06',
+        },
+        body: jsonEncode({
+          'promptText': prompt,
+          'model': 'gen3a_turbo',
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['output']?[0] ?? '';
+      }
+      return "Error en la respuesta de Runway: ${response.statusCode}";
+    } catch (e) {
+      return "Excepción conectando con Runway: $e";
+    }
+  }
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ISAIAS TITÁN',
+      title: 'TITÁN AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0F19),
-        primaryColor: const Color(0xFFFF6B00),
+        scaffoldBackgroundColor: const Color(0xFF040814),
       ),
       home: const MainTitanScreen(),
     );
   }
 }
 
+// --- Modelos de datos auxiliares ---
+class VideoAccionItem {
+  final String titulo;
+  final String categoria;
+  final String resolucion;
+  final String descripcion;
+  final String videoUrl;
+
+  VideoAccionItem({
+    required this.titulo,
+    required this.categoria,
+    required this.resolucion,
+    required this.descripcion,
+    required this.videoUrl,
+  });
+}
+
 class ChatMessage {
   final String text;
   final bool isUser;
   final String? filePath;
-  final String? videoUrl;
+  final Uint8List? fileBytes;
+  final String? fileType;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     this.filePath,
-    this.videoUrl,
+    this.fileBytes,
+    this.fileType,
   });
 }
 
 class ModeloChat {
   final String id;
-  String titulo;
-  List<ChatMessage> mensajes;
+  final String titulo;
+  final List<ChatMessage> mensajes;
 
   ModeloChat({
     required this.id,
@@ -59,6 +135,7 @@ class ModeloChat {
   });
 }
 
+// --- Pantalla principal con el Drawer Reorganizado ---
 class MainTitanScreen extends StatefulWidget {
   const MainTitanScreen({super.key});
 
@@ -67,418 +144,582 @@ class MainTitanScreen extends StatefulWidget {
 }
 
 class _MainTitanScreenState extends State<MainTitanScreen> {
-  bool _mostrandoGaleriaVideos = false;
-
-  final List<ModeloChat> _historialConversaciones = [];
-  ModeloChat? _chatActual;
-  Key _chatKey = UniqueKey();
-
-  void _nuevaConversacion() {
-    setState(() {
-      _mostrandoGaleriaVideos = false;
-      _chatActual = null;
-      _chatKey = UniqueKey();
-    });
-  }
-
-  void _abrirGaleriaVideos() {
-    setState(() {
-      _mostrandoGaleriaVideos = true;
-    });
-  }
-
-  void _seleccionarChatDelHistorial(ModeloChat chat) {
-    setState(() {
-      _mostrandoGaleriaVideos = false;
-      _chatActual = chat;
-      _chatKey = UniqueKey();
-    });
-  }
-
-  void _guardarOActualizarChat(String primerMensaje, List<ChatMessage> mensajesActuales) {
-    if (_chatActual == null) {
-      String tituloCorto = primerMensaje.length > 25 
-          ? "${primerMensaje.substring(0, 25)}..." 
-          : primerMensaje;
-
-      final nuevoChat = ModeloChat(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        titulo: tituloCorto,
-        mensajes: List.from(mensajesActuales),
-      );
-
-      setState(() {
-        _historialConversaciones.insert(0, nuevoChat);
-        _chatActual = nuevoChat;
-      });
-    } else {
-      setState(() {
-        _chatActual!.mensajes = List.from(mensajesActuales);
-      });
-    }
-  }
-
-  void _mostrarDialogoRecientes(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
-        title: const Text("Conversaciones Recientes", style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: 320,
-          child: _historialConversaciones.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Text(
-                    "Aún no hay conversaciones guardadas. ¡Empieza a chatear!",
-                    style: TextStyle(color: Colors.white60),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _historialConversaciones.length,
-                  itemBuilder: (context, index) {
-                    final chat = _historialConversaciones[index];
-                    return ListTile(
-                      leading: const Icon(Icons.chat_bubble_outline, color: Color(0xFFFF6B00)),
-                      title: Text(
-                        chat.titulo, 
-                        style: const TextStyle(color: Color(0xFFE2E8F0)),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _seleccionarChatDelHistorial(chat);
-                      },
-                      hoverColor: const Color(0xFF1F293D),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cerrar", style: TextStyle(color: Color(0xFFFF6B00))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _mostrarDialogoConfiguracion(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
-        title: const Text("Configuración del Sistema", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            SwitchListTile(
-              title: Text("Modo Creativo Avanzado", style: TextStyle(color: Color(0xFFE2E8F0))),
-              value: true,
-              activeColor: Color(0xFFFF6B00),
-              onChanged: null,
-            ),
-            SwitchListTile(
-              title: Text("Respuestas Extendidas", style: TextStyle(color: Color(0xFFE2E8F0))),
-              value: true,
-              activeColor: Color(0xFFFF6B00),
-              onChanged: null,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Guardar", style: TextStyle(color: Color(0xFFFF6B00))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _mostrarDialogoPapelera(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
-        title: const Text("Papelera", style: TextStyle(color: Colors.white)),
-        content: const Text("No hay elementos eliminados recientemente.", style: TextStyle(color: Colors.white60)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Vaciar Papelera", style: TextStyle(color: Color(0xFFFF6B00))),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cerrar", style: TextStyle(color: Color(0xFFFF6B00))),
-          ),
-        ],
-      ),
-    );
-  }
+  int _indiceActual = 0; 
+  List<ModeloChat> _historialChats = [];
+  ModeloChat? _chatActivo;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
-      body: Row(
-        children: [
-          Container(
-            width: 260,
-            color: const Color(0xFF111827),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 16.0),
-                  child: InkWell(
-                    onTap: _nuevaConversacion,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1F293D),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFFF6B00).withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.auto_awesome, color: Color(0xFFFF6B00), size: 16),
-                          SizedBox(width: 8),
-                          Text(
-                            "Nueva Conversación", 
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
+      backgroundColor: const Color(0xFF040814),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF070E22),
+        title: Text(
+          _indiceActual == 1
+              ? 'GALERÍA DE ACCIÓN Y GÉNEROS'
+              : _indiceActual == 2
+                  ? 'GENERAL VIDEO'
+                  : 'TITÁN AI',
+          style: const TextStyle(color: Color(0xFF00F0FF), fontWeight: FontWeight.bold),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF00F0FF)),
+      ),
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF070E22),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                color: Color(0xFF0A1B38),
+                border: Border(bottom: BorderSide(color: Color(0xFF102A45))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Text(
+                    'TITÁN',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 5),
-
-                _SidebarMenuOption(
-                  icon: Icons.video_collection_outlined,
-                  title: "Videos con IA",
-                  onTap: _abrirGaleriaVideos,
-                ),
-                _SidebarMenuOption(
-                  icon: Icons.settings_outlined,
-                  title: "Configuración",
-                  onTap: () => _mostrarDialogoConfiguracion(context),
-                ),
-                _SidebarMenuOption(
-                  icon: Icons.delete_outline,
-                  title: "Papelera",
-                  onTap: () => _mostrarDialogoPapelera(context),
-                ),
-                _SidebarMenuOption(
-                  icon: Icons.history,
-                  title: "Recientes",
-                  onTap: () => _mostrarDialogoRecientes(context),
-                ),
-                
-                const Spacer(),
-                const Divider(color: Colors.white12, height: 1),
-                
-                Container(
-                  padding: const EdgeInsets.all(12.0),
-                  color: const Color(0xFF0D1322),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 15,
-                        backgroundColor: const Color(0xFFFF6B00),
-                        child: const Text("T", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              "TITÁN AI",
-                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              "Sistema Activo",
-                              style: TextStyle(color: Color(0xFFFF6B00), fontSize: 11),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _chatActivo = null;
+                        _indiceActual = 0;
+                      });
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('NUEVO CHAT'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0A223E),
+                      foregroundColor: const Color(0xFF00F0FF),
+                      side: const BorderSide(color: Color(0xFF00F0FF)),
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          Expanded(
-            child: _mostrandoGaleriaVideos 
-                ? const GaleriaVideosIASScreen() 
-                : ChatScreen(
-                    key: _chatKey,
-                    chatInicial: _chatActual,
-                    onMensajesActualizados: _guardarOActualizarChat,
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarMenuOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  const _SidebarMenuOption({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: ListTile(
-        dense: true,
-        leading: Icon(icon, color: const Color(0xFFFF6B00), size: 18),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        title: Text(
-          title,
-          style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 13, fontWeight: FontWeight.w400),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline, color: Color(0xFF00F0FF)),
+              title: const Text('Chat Principal', style: TextStyle(color: Colors.white70)),
+              onTap: () {
+                setState(() { _indiceActual = 0; });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined, color: Color(0xFF00F0FF)),
+              title: const Text('Galería de Acción', style: TextStyle(color: Colors.white70)),
+              onTap: () {
+                setState(() { _indiceActual = 1; });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.movie_creation_outlined, color: Color(0xFF00F0FF)),
+              title: const Text('General Video', style: TextStyle(color: Colors.white70)),
+              onTap: () {
+                setState(() { _indiceActual = 2; });
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(color: Color(0xFF102A45), height: 30),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Text(
+                'CONVERSACIONES',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00F0FF),
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            if (_historialChats.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text('No hay conversaciones guardadas', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              )
+            else
+              for (var chat in _historialChats)
+                ListTile(
+                  leading: const Icon(Icons.history, color: Colors.white54, size: 18),
+                  title: Text(chat.titulo, style: const TextStyle(color: Colors.white70, fontSize: 13), overflow: TextOverflow.ellipsis),
+                  onTap: () {
+                    setState(() {
+                      _chatActivo = chat;
+                      _indiceActual = 0;
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+          ],
         ),
-        onTap: onTap,
-        hoverColor: const Color(0xFF1F293D),
       ),
+      body: _obtenerVistaActual(),
     );
+  }
+
+  Widget _obtenerVistaActual() {
+    if (_indiceActual == 1) {
+      return const GaleriaAccionScreen();
+    } else if (_indiceActual == 2) {
+      return const GeneralVideoScreen();
+    } else {
+      return ChatScreen(
+        chatInicial: _chatActivo,
+        onMensajesActualizados: (primerMensaje, mensajes) {
+          setState(() {
+            if (_chatActivo == null) {
+              final nuevoChat = ModeloChat(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                titulo: primerMensaje.length > 25 ? '${primerMensaje.substring(0, 25)}...' : primerMensaje,
+                mensajes: mensajes,
+              );
+              _historialChats.add(nuevoChat);
+              _chatActivo = nuevoChat;
+            }
+          });
+        },
+      );
+    }
   }
 }
 
-class GaleriaVideosIASScreen extends StatelessWidget {
-  const GaleriaVideosIASScreen({super.key});
+// --- Pantalla Galería de Acción ---
+class GaleriaAccionScreen extends StatelessWidget {
+  const GaleriaAccionScreen({super.key});
 
-  final List<Map<String, String>> _videosVirales = const [
-    {
-      "titulo": "Persecución Cibernética Neón",
-      "categoria": "Acción",
-      "url": "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
-      "descripcion": "Generado con Sora / Runway Gen-3 con renderizado realista de vehículos futuristas a alta velocidad."
-    },
-    {
-      "titulo": "Atardecer en Estación Espacial",
-      "categoria": "Romance",
-      "url": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4",
-      "descripcion": "Escena cinematográfica hiperrealista de un encuentro emotivo bajo gravedad cero."
-    },
-    {
-      "titulo": "El Despertar de la Nebulosa",
-      "categoria": "Terror",
-      "url": "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
-      "descripcion": "Ambiente de misterio y suspenso generado por inteligencia artificial en formato IMAX."
-    },
-    {
-      "titulo": "Viaje al Núcleo de TITÁN",
-      "categoria": "Ciencia Ficción",
-      "url": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4",
-      "descripcion": "Simulación cuántica de estructuras tridimensionales de energía pura."
-    },
+  static final List<VideoAccionItem> listaVideos = [
+    VideoAccionItem(
+      titulo: "Combate de Artes Marciales Mixtas",
+      categoria: "Pelea / Acción Real",
+      resolucion: "1080P HD",
+      descripcion: "Demostración de intercambio de golpes dinámicos en ring profesional.",
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    ),
+    VideoAccionItem(
+      titulo: "Persecución Nocturna en Autopista",
+      categoria: "Acción / Suspenso",
+      resolucion: "4K ULTRA",
+      descripcion: "Escena de alta tensión con vehículos deportivos a máxima velocidad.",
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+    ),
+    VideoAccionItem(
+      titulo: "Sombra en el Pasillo Oscuro",
+      categoria: "Terror / Misterio",
+      resolucion: "1080P HD",
+      descripcion: "Ambiente tétrico y cinematográfico diseñado para pruebas de terror psicológico.",
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
-      body: Padding(
-        padding: const EdgeInsets.all(30.0),
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'EXPLORADOR MULTIMEDIA: ACCIÓN Y TERROR',
+            style: TextStyle(color: Color(0xFF00F0FF), fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Selecciona un contenido multimedia compatible para reproducir en streaming directo dentro de la app.',
+            style: TextStyle(color: Colors.white60, fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: listaVideos.length,
+              itemBuilder: (context, index) {
+                final video = listaVideos[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF070E22),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF102A45), width: 1),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A1B38),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF00F0FF), width: 1),
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded, color: Color(0xFF00F0FF), size: 26),
+                    ),
+                    title: Text(video.titulo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(video.categoria, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(video.descripcion, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                      ],
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A223E),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF00F0FF)),
+                      ),
+                      child: Text(video.resolucion, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => _DialogoReproductorVideo(video: video),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Pantalla General Video ---
+class GeneralVideoScreen extends StatefulWidget {
+  const GeneralVideoScreen({super.key});
+
+  @override
+  State<GeneralVideoScreen> createState() => _GeneralVideoScreenState();
+}
+
+class _GeneralVideoScreenState extends State<GeneralVideoScreen> {
+  final List<VideoAccionItem> _videosGenerales = [
+    VideoAccionItem(
+      titulo: "Presentación Corporativa TITÁN",
+      categoria: "General / Tecnológico",
+      resolucion: "1080P HD",
+      descripcion: "Video de demostración general de las capacidades analíticas de la plataforma.",
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    ),
+  ];
+
+  void _agregarVideoLocal() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.video);
+    if (result != null && result.files.isNotEmpty) {
+      final archivo = result.files.first;
+      setState(() {
+        _videosGenerales.add(
+          VideoAccionItem(
+            titulo: archivo.name,
+            categoria: "Video Local / Personal",
+            resolucion: "HD",
+            descripcion: "Archivo multimedia cargado desde el dispositivo del usuario.",
+            videoUrl: archivo.path ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+          ),
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'REPOSITORIO GENERAL DE VÍDEOS',
+                    style: TextStyle(color: Color(0xFF00F0FF), fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Administra, reproduce y carga tus propios archivos de vídeo multimedia.',
+                    style: TextStyle(color: Colors.white60, fontSize: 13),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0A223E),
+                  foregroundColor: const Color(0xFF00F0FF),
+                  side: const BorderSide(color: Color(0xFF00F0FF)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onPressed: _agregarVideoLocal,
+                icon: const Icon(Icons.upload_file, size: 16),
+                label: const Text('SUBIR VÍDEO'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _videosGenerales.length,
+              itemBuilder: (context, index) {
+                final video = _videosGenerales[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF070E22),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF102A45), width: 1),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A1B38),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF00F0FF), width: 1),
+                      ),
+                      child: const Icon(Icons.movie_rounded, color: Color(0xFF00F0FF), size: 26),
+                    ),
+                    title: Text(video.titulo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(video.categoria, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(video.descripcion, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                      ],
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A223E),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF00F0FF)),
+                      ),
+                      child: Text(video.resolucion, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => _DialogoReproductorVideo(video: video),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Diálogo Reproductor de Video ---
+class _DialogoReproductorVideo extends StatefulWidget {
+  final VideoAccionItem video;
+  const _DialogoReproductorVideo({required this.video});
+
+  @override
+  State<_DialogoReproductorVideo> createState() => _DialogoReproductorVideoState();
+}
+
+class _DialogoReproductorVideoState extends State<_DialogoReproductorVideo> {
+  VideoPlayerController? _controller;
+  bool _inicializado = false;
+  bool _errorCarga = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _inicializarVideo();
+  }
+
+  void _inicializarVideo() {
+    String urlReproduccion = widget.video.videoUrl;
+
+    _controller = VideoPlayerController.networkUrl(Uri.parse(urlReproduccion))
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() {
+          _inicializado = true;
+          _errorCarga = false;
+          _controller?.play();
+        });
+      }).catchError((error) {
+        if (!mounted) return;
+        setState(() {
+          _errorCarga = true;
+        });
+        debugPrint("Error crítico en reproductor web: $error");
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF070E22),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFF00F0FF), width: 1),
+      ),
+      child: Container(
+        width: 700,
+        padding: const EdgeInsets.all(20),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: const [
-                Icon(Icons.video_collection, color: Color(0xFFFF6B00), size: 28),
-                SizedBox(width: 12),
-                Text(
-                  "Galería de Videos Virales con IA",
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A1B38),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF00F0FF)),
+                  ),
+                  child: Text(widget.video.resolucion, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.video.titulo,
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-              "Explora las producciones más realistas e impactantes generadas por redes neuronales de última generación.",
-              style: TextStyle(color: Colors.white54, fontSize: 14),
-            ),
-            const SizedBox(height: 25),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
-                  childAspectRatio: 1.4,
-                ),
-                itemCount: _videosVirales.length,
-                itemBuilder: (context, index) {
-                  final video = _videosVirales[index];
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131B2E),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFF6B00).withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                video["titulo"]!,
-                                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF6B00).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFFFF6B00)),
-                                ),
-                                child: Text(
-                                  video["categoria"]!,
-                                  style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                            child: ChatVideoPlayer(videoUrl: video["url"]!),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+            const SizedBox(height: 12),
+            Container(
+              height: 320,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF102A45)),
               ),
+              child: _errorCarga
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.redAccent, size: 36),
+                          const SizedBox(height: 8),
+                          const Text("El navegador bloqueó el flujo multimedia.", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0A223E), foregroundColor: const Color(0xFF00F0FF)),
+                            onPressed: () {
+                              setState(() {
+                                _errorCarga = false;
+                                _inicializado = false;
+                              });
+                              _inicializarVideo();
+                            },
+                            icon: const Icon(Icons.refresh, size: 14),
+                            label: const Text("Reintentar"),
+                          ),
+                        ],
+                      ),
+                    )
+                  : (_inicializado && _controller != null)
+                      ? Stack(
+                          alignment: Alignment.bottomCenter,
+                          children: [
+                            Center(
+                              child: AspectRatio(
+                                aspectRatio: _controller!.value.aspectRatio,
+                                child: VideoPlayer(_controller!),
+                              ),
+                            ),
+                            Positioned(
+                              child: Center(
+                                child: IconButton(
+                                  icon: Icon(
+                                    _controller!.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                    color: const Color(0xFF00F0FF).withOpacity(0.85),
+                                    size: 54,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              color: Colors.black54,
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                                      color: const Color(0xFF00F0FF),
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
+                                      });
+                                    },
+                                  ),
+                                  Expanded(
+                                    child: VideoProgressIndicator(
+                                      _controller!,
+                                      allowScrubbing: true,
+                                      colors: const VideoProgressColors(
+                                        playedColor: Color(0xFF00F0FF),
+                                        bufferedColor: Colors.white24,
+                                        backgroundColor: Colors.white10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : const Center(
+                          child: CircularProgressIndicator(color: Color(0xFF00F0FF)),
+                        ),
             ),
+            const SizedBox(height: 12),
+            Text(widget.video.categoria, style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(widget.video.descripcion, style: const TextStyle(color: Colors.white60, fontSize: 12)),
           ],
         ),
       ),
@@ -486,15 +727,12 @@ class GaleriaVideosIASScreen extends StatelessWidget {
   }
 }
 
+// --- Pantalla de Chat ---
 class ChatScreen extends StatefulWidget {
   final ModeloChat? chatInicial;
   final Function(String, List<ChatMessage>) onMensajesActualizados;
 
-  const ChatScreen({
-    super.key,
-    this.chatInicial,
-    required this.onMensajesActualizados,
-  });
+  const ChatScreen({super.key, this.chatInicial, required this.onMensajesActualizados});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -502,27 +740,80 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
-  final ScrollController _scrollController = ScrollController(); // CONTROLADOR DE SCROLL AUTOMÁTICO
+  final ScrollController _scrollController = ScrollController();
   late List<ChatMessage> _messages;
   
   bool _isLoading = false;
   PlatformFile? _archivoSeleccionado;
+  Uint8List? _bytesArchivoSeleccionado;
+  String? _tipoArchivoSeleccionado;
 
   late GenerativeModel _model;
 
-  final List<String> _videosDemo = [
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-  ];
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+  bool _speechAvailable = false;
 
   @override
   void initState() {
     super.initState();
-    _messages = widget.chatInicial != null ? List.from(widget.chatInicial!.mensajes) : [];
+    _messages = widget.chatInicial != null ? List.from(widget.chatInicial!.mensajes) : [
+      ChatMessage(
+        text: "¡Hola! Soy TITÁN, tu asistente de inteligencia artificial avanzada.\n\n¿En qué puedo ayudarte hoy? Puedes hacerme cualquier consulta o compartir conmigo imágenes, vídeos de acción o documentos para analizarlos con total precisión y detalle.",
+        isUser: false,
+      )
+    ];
     _inicializarIA();
+    _initSpeech();
   }
 
-  // Función para mover el scroll hacia abajo automáticamente
+  void _initSpeech() async {
+    _speech = stt.SpeechToText();
+    _speechAvailable = await _speech.initialize(
+      onStatus: (status) {
+        if (status == 'notListening' || status == 'done') {
+          setState(() => _isListening = false);
+        }
+      },
+      onError: (error) => setState(() => _isListening = false),
+    );
+    setState(() {});
+  }
+
+  void _toggleListening() async {
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El reconocimiento de voz no está disponible en este dispositivo')),
+      );
+      return;
+    }
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      setState(() => _isListening = true);
+      _speech.listen(
+        onResult: (result) {
+          setState(() {
+            _controller.text = result.recognizedWords;
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          });
+        },
+        localeId: 'es_ES',
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _irAlFinalDelChat() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -534,358 +825,300 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _inicializarIA() {
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-    
+    final apiKey = TitanApiManager.geminiKey;
     _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash', // <--- Tu versión restaurada y funcional
       apiKey: apiKey,
       systemInstruction: Content.text(
-        "Eres TITÁN, un asistente virtual avanzado. Cuando te pidan una explicación, historia o investigación, "
-        "responde de manera totalmente desarrollada, detallada, clara y completa. No cortes tus explicaciones. No utilices asteriscos ni formatos de markdown en tus respuestas."
-      ),
-      generationConfig: GenerationConfig(
-        maxOutputTokens: 4000,
-        temperature: 0.6,      
+        "Eres TITÁN, un asistente de inteligencia artificial avanzada. Al redactar tus respuestas, NO utilices símbolos de asteriscos ni marcas de formato Markdown (como **, *, ###). Presenta el texto siempre limpio, ordenado y formateado mediante párrafos claros o guiones sencillos."
       ),
     );
   }
 
-  Future<void> _seleccionarArchivo() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-      );
+  String _limpiarTextoMarkdown(String texto) {
+    return texto
+        .replaceAll('**', '')
+        .replaceAll('*', '')
+        .replaceAll('###', '')
+        .replaceAll('##', '')
+        .replaceAll('#', '');
+  }
 
-      if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _archivoSeleccionado = result.files.first;
-        });
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("📁 Archivo adjuntado: ${_archivoSeleccionado!.name}"),
-            backgroundColor: const Color(0xFF1F293D),
+  void _mostrarOpcionesMas(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF070E22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        side: BorderSide(color: Color(0xFF00F0FF), width: 1),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.attach_file, color: Color(0xFF00F0FF)),
+                title: const Text('Subir archivo', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  FilePickerResult? result = await FilePicker.platform.pickFiles();
+                  if (result != null && result.files.isNotEmpty) {
+                    setState(() {
+                      _archivoSeleccionado = result.files.first;
+                      _bytesArchivoSeleccionado = result.files.first.bytes;
+                      _tipoArchivoSeleccionado = 'file';
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Color(0xFF00F0FF)),
+                title: const Text('Cámara', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final ImagePicker picker = ImagePicker();
+                  final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+                  if (photo != null) {
+                    final bytes = await photo.readAsBytes();
+                    setState(() {
+                      _archivoSeleccionado = PlatformFile(name: photo.name, size: bytes.length, bytes: bytes);
+                      _bytesArchivoSeleccionado = bytes;
+                      _tipoArchivoSeleccionado = 'image';
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.image, color: Color(0xFF00F0FF)),
+                title: const Text('Imagen', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final ImagePicker picker = ImagePicker();
+                  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                  if (image != null) {
+                    final bytes = await image.readAsBytes();
+                    setState(() {
+                      _archivoSeleccionado = PlatformFile(name: image.name, size: bytes.length, bytes: bytes);
+                      _bytesArchivoSeleccionado = bytes;
+                      _tipoArchivoSeleccionado = 'image';
+                    });
+                  }
+                },
+              ),
+            ],
           ),
         );
-      }
-    } catch (e) {
-      debugPrint("Error al seleccionar archivo: $e");
-    }
+      },
+    );
   }
 
-  bool _esPeticionDeVideo(String texto) {
-    final t = texto.toLowerCase();
-    return t.contains("video") || 
-           t.contains("crea esa") || 
-           t.contains("generar video") || 
-           t.contains("haz un video") ||
-           t.contains("crea un video") ||
-           t.contains("en un video");
-  }
-
-  Future<void> _enviarMensaje([String? textoForzado]) async {
-    final texto = textoForzado ?? _controller.text.trim();
+  Future<void> _enviarMensaje() async {
+    final texto = _controller.text.trim();
     if (texto.isEmpty && _archivoSeleccionado == null) return;
 
-    final mensajeUsuario = ChatMessage(
-      text: texto.isEmpty ? "Analiza este archivo: ${_archivoSeleccionado?.name}" : texto,
-      isUser: true,
-      filePath: _archivoSeleccionado?.name,
-    );
-
-    setState(() {
-      _messages.add(mensajeUsuario);
-      _controller.clear();
-      _archivoSeleccionado = null;
-      _isLoading = true;
-    });
-
-    // Bajamos el scroll al enviar mensaje
-    WidgetsBinding.instance.addPostFrameCallback((_) => _irAlFinalDelChat());
-    
-    if (_messages.length == 1) {
-      widget.onMensajesActualizados(mensajeUsuario.text, _messages);
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
     }
 
-    try {
-      String respuestaTexto = "";
-      String? videoGeneradoUrl;
+    final textoPregunta = texto.isEmpty ? "Analiza este archivo adjunto." : texto;
+    final archivoActual = _archivoSeleccionado;
+    final bytesActuales = _bytesArchivoSeleccionado;
+    final tipoActual = _tipoArchivoSeleccionado;
 
-      if (_esPeticionDeVideo(texto)) {
-        await Future.delayed(const Duration(seconds: 2));
-        videoGeneradoUrl = (_videosDemo..shuffle()).first;
-        respuestaTexto = "🎬 Video generado con éxito mediante Red Neuronal de Alta Definición.";
+    setState(() {
+      _messages.add(ChatMessage(
+        text: textoPregunta,
+        isUser: true,
+        filePath: archivoActual?.name,
+        fileBytes: bytesActuales,
+        fileType: tipoActual,
+      ));
+      _isLoading = true;
+      _archivoSeleccionado = null;
+      _bytesArchivoSeleccionado = null;
+      _tipoArchivoSeleccionado = null;
+    });
+
+    _controller.clear();
+    Future.delayed(const Duration(milliseconds: 100), _irAlFinalDelChat);
+
+    try {
+      dynamic content;
+      if (bytesActuales != null && (tipoActual == 'image' || tipoActual == 'file')) {
+        final ext = archivoActual?.extension ?? 'png';
+        content = [
+          Content.multi([
+            TextPart(textoPregunta),
+            DataPart('image/$ext', bytesActuales),
+          ])
+        ];
       } else {
-        final content = [Content.text(texto)];
-        final response = await _model.generateContent(content);
-        respuestaTexto = response.text ?? "Sin respuesta del modelo.";
+        content = [Content.text(textoPregunta)];
       }
 
-      final mensajeIA = ChatMessage(
-        text: respuestaTexto,
-        isUser: false,
-        videoUrl: videoGeneradoUrl,
-      );
+      final response = await _model.generateContent(content);
+      final respuestaCruda = response.text ?? "Análisis completado con éxito.";
+      final respuestaLimpia = _limpiarTextoMarkdown(respuestaCruda);
 
       setState(() {
-        _messages.add(mensajeIA);
-        _isLoading = false;
+        _messages.add(ChatMessage(text: respuestaLimpia, isUser: false));
       });
 
-      // Bajamos el scroll al recibir la respuesta de la IA
-      WidgetsBinding.instance.addPostFrameCallback((_) => _irAlFinalDelChat());
-      widget.onMensajesActualizados(_messages.first.text, _messages);
+      widget.onMensajesActualizados(textoPregunta, _messages);
 
     } catch (e) {
       setState(() {
-        _isLoading = false;
-        _messages.add(ChatMessage(text: "⚠️ Error de conexión con la IA: $e", isUser: false));
+        _messages.add(ChatMessage(text: "Error de procesamiento: Verifique su API Key en el archivo .env ($e)", isUser: false));
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _irAlFinalDelChat());
+    } finally {
+      setState(() { _isLoading = false; });
+      Future.delayed(const Duration(milliseconds: 100), _irAlFinalDelChat);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? Center(
-                    // PANTALLA DE BIENVEINDA INICIAL
-                    child: Text(
-                      "¿Por dónde deberíamos empezar?",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+            itemCount: _messages.length,
+            itemBuilder: (context, index) {
+              final msg = _messages[index];
+              return Align(
+                alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.all(20),
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.60),
+                  decoration: BoxDecoration(
+                    color: msg.isUser ? const Color(0xFF071F3C) : const Color(0xFF070E22),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: msg.isUser ? const Color(0xFF00F0FF) : const Color(0xFF102A45),
+                      width: 1,
                     ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController, // CONEXIÓN DEL SCROLL AUTOMÁTICO
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                    itemCount: _messages.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == _messages.length) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            children: const [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B00)),
-                              ),
-                              SizedBox(width: 12),
-                              Text("TITÁN está redactando la respuesta...", style: TextStyle(color: Colors.white54, fontSize: 13)),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final msg = _messages[index];
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
-                          padding: const EdgeInsets.all(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (msg.fileBytes != null && (msg.fileType == 'image' || msg.fileType == 'file'))
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          constraints: const BoxConstraints(maxHeight: 240, maxWidth: 340),
                           decoration: BoxDecoration(
-                            color: msg.isUser ? const Color(0xFFFF6B00) : const Color(0xFF131B2E),
-                            borderRadius: BorderRadius.circular(12),
-                            border: msg.isUser ? null : Border.all(color: const Color(0xFFFF6B00).withOpacity(0.2)),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF00F0FF), width: 1),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (msg.filePath != null) ...[
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.attach_file, color: Colors.white70, size: 16),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        msg.filePath!,
-                                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontStyle: FontStyle.italic),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                              ],
-                              Text(
-                                msg.text,
-                                style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
-                              ),
-                              if (msg.videoUrl != null) ...[
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  height: 180,
-                                  width: 320,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: ChatVideoPlayer(videoUrl: msg.videoUrl!),
-                                  ),
-                                ),
-                              ],
-                            ],
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: Image.memory(msg.fileBytes!, fit: BoxFit.cover),
                           ),
                         ),
-                      );
-                    },
+                      Text(
+                        msg.text,
+                        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                      ),
+                    ],
                   ),
+                ),
+              );
+            },
           ),
+        ),
+        if (_isLoading)
+          const LinearProgressIndicator(color: Color(0xFF00F0FF), backgroundColor: Color(0xFF070E22)),
+        if (_bytesArchivoSeleccionado != null)
           Container(
-            padding: const EdgeInsets.all(16),
-            color: const Color(0xFF0B0F19),
-            child: Column(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            color: const Color(0xFF070E22),
+            child: Row(
               children: [
-                if (_archivoSeleccionado != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131B2E),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFF6B00)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.insert_drive_file, color: Color(0xFFFF6B00), size: 16),
-                        const SizedBox(width: 8),
-                        Text(_archivoSeleccionado!.name, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        const SizedBox(width: 8),
-                        InkWell(
-                          onTap: () => setState(() => _archivoSeleccionado = null),
-                          child: const Icon(Icons.close, color: Colors.white54, size: 16),
-                        ),
-                      ],
-                    ),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF00F0FF)),
                   ),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _seleccionarArchivo,
-                      icon: const Icon(Icons.attach_file, color: Colors.white54),
-                      tooltip: "Adjuntar archivo",
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        style: const TextStyle(color: Colors.white),
-                        onSubmitted: (val) => _enviarMensaje(),
-                        decoration: InputDecoration(
-                          hintText: "Investiga algo o crea una serie...",
-                          hintStyle: const TextStyle(color: Colors.white38),
-                          filled: true,
-                          fillColor: const Color(0xFF131B2E),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF6B00),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        onPressed: () => _enviarMensaje(),
-                        icon: const Icon(Icons.arrow_upward, color: Colors.white),
-                      ),
-                    ),
-                  ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.memory(_bytesArchivoSeleccionado!, fit: BoxFit.cover),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  "Listo para enviar: ${_archivoSeleccionado?.name ?? ''}",
+                  style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white54, size: 18),
+                  onPressed: () => setState(() {
+                    _archivoSeleccionado = null;
+                    _bytesArchivoSeleccionado = null;
+                    _tipoArchivoSeleccionado = null;
+                  }),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class ChatVideoPlayer extends StatefulWidget {
-  final String videoUrl;
-
-  const ChatVideoPlayer({super.key, required this.videoUrl});
-
-  @override
-  State<ChatVideoPlayer> createState() => _ChatVideoPlayerState();
-}
-
-class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
-  late VideoPlayerController _controller;
-  bool _isPlaying = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-      ..initialize().then((_) {
-        setState(() {});
-      });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _togglePlay() {
-    setState(() {
-      if (_controller.value.isPlaying) {
-        _controller.pause();
-        _isPlaying = false;
-      } else {
-        _controller.play();
-        _isPlaying = true;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _controller.value.isInitialized
-        ? Stack(
-            alignment: Alignment.center,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: const BoxDecoration(
+            color: Color(0xFF070E22),
+            border: Border(top: BorderSide(color: Color(0xFF102A45), width: 1)),
+          ),
+          child: Row(
             children: [
-              AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, color: Color(0xFF00F0FF), size: 24),
+                onPressed: () => _mostrarOpcionesMas(context),
+                tooltip: "Opciones adicionales",
               ),
-              GestureDetector(
-                onTap: _togglePlay,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
+              const SizedBox(width: 15),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: _isListening ? "Escuchando lo que hablas..." : "Escribe un mensaje para TITÁN...",
+                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                    border: InputBorder.none,
                   ),
-                  padding: const EdgeInsets.all(10),
-                  child: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+                  onSubmitted: (_) => _enviarMensaje(),
                 ),
               ),
+              const SizedBox(width: 10),
+              IconButton(
+                icon: Icon(
+                  _isListening ? Icons.mic : Icons.mic_none,
+                  color: _isListening ? Colors.redAccent : const Color(0xFF00F0FF),
+                  size: 22,
+                ),
+                onPressed: _toggleListening,
+                tooltip: "Comando de voz",
+              ),
+              const SizedBox(width: 15),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0A223E),
+                  foregroundColor: const Color(0xFF00F0FF),
+                  side: const BorderSide(color: Color(0xFF00F0FF), width: 1),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+                onPressed: _enviarMensaje,
+                icon: const Icon(Icons.send_rounded, size: 16),
+                label: const Text("ENVIAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 12)),
+              ),
             ],
-          )
-        : const Center(
-            child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-          );
+          ),
+        ),
+      ],
+    );
   }
 }
