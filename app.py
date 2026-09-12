@@ -8,16 +8,15 @@ app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
+# Variables de entorno principales
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-KLING_API_KEY = os.getenv("KLING_API_KEY")
-RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({
         "estado": "ACTIVO",
         "sistema": "TITÁN Core",
-        "mensaje": "Servidor Flask funcionando con Gemini 3.5 Flash."
+        "mensaje": "Servidor base limpio y operativo."
     })
 
 @app.route('/chat', methods=['POST'])
@@ -31,34 +30,17 @@ def chat():
 
         mensaje_original = data.get("mensaje") or data.get("prompt") or data.get("message", "")
         mensaje_original = str(mensaje_original).strip()
-        mensaje_lower = mensaje_original.lower()
 
         if not mensaje_original:
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
-        if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
-            if not KLING_API_KEY and not RUNWAY_API_KEY:
-                return jsonify({
-                    "exito": True,
-                    "es_video": False,
-                    "video_url": "",
-                    "respuesta": "Aviso: Las API Keys de video no se detectaron en el servidor, pero tu solicitud ha sido registrada."
-                })
-            else:
-                return jsonify({
-                    "exito": True,
-                    "es_video": True,
-                    "video_url": "https://www.w3schools.com/html/mov_bbb.mp4",
-                    "respuesta": f"🎥 Aquí tienes tu producción generada para: \"{mensaje_original.capitalize()}\"."
-                })
-        
         if not GEMINI_API_KEY:
             return jsonify({
                 "exito": False, 
-                "error": "Falta configurar la GEMINI_API_KEY en las variables de entorno de Render."
+                "error": "Falta configurar la GEMINI_API_KEY en el entorno."
             }), 500
 
-        # Endpoint oficial actualizado para Gemini 3.5 Flash
+        # Endpoint directo con la API de Gemini
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
         
         payload = {
@@ -67,8 +49,8 @@ def chat():
                     "parts": [
                         {
                             "text": (
-                                "Eres TITÁN, un núcleo de inteligencia artificial avanzado, directo, técnico y libre. "
-                                f"Responde de forma detallada al siguiente mensaje: {mensaje_original}"
+                                "Eres TITÁN, un asistente de inteligencia artificial avanzado y directo. "
+                                f"Responde a la siguiente consulta: {mensaje_original}"
                             )
                         }
                     ]
@@ -94,14 +76,14 @@ def chat():
                 "respuesta": bot_reply
             })
         else:
-            print("Error de Gemini API:", response.text)
+            print("Error en API externa:", response.text)
             return jsonify({
                 "exito": False, 
-                "error": f"Error en el motor de IA externo: {response.text}"
+                "error": f"Error del servidor de IA: {response.text}"
             }), 500
         
     except Exception as e:
-        print("Excepción interna en Flask:", str(e))
+        print("Excepción interna:", str(e))
         return jsonify({"exito": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
