@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 KLING_API_KEY = os.getenv("KLING_API_KEY")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 
@@ -17,7 +17,7 @@ def index():
     return jsonify({
         "estado": "ACTIVO",
         "sistema": "TITÁN Core",
-        "mensaje": "Servidor Flask funcionando en la nube con OpenAI."
+        "mensaje": "Servidor Flask funcionando con Gemini 3.5 Flash."
     })
 
 @app.route('/chat', methods=['POST'])
@@ -36,7 +36,6 @@ def chat():
         if not mensaje_original:
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
-        # Manejo de generación de video (Kling / Runway)
         if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
             if not KLING_API_KEY and not RUNWAY_API_KEY:
                 return jsonify({
@@ -53,46 +52,40 @@ def chat():
                     "respuesta": f"🎥 Aquí tienes tu producción generada para: \"{mensaje_original.capitalize()}\"."
                 })
         
-        if not OPENAI_API_KEY:
+        if not GEMINI_API_KEY:
             return jsonify({
                 "exito": False, 
-                "error": "Falta configurar la OPENAI_API_KEY en las variables de entorno de Render."
+                "error": "Falta configurar la GEMINI_API_KEY en las variables de entorno de Render."
             }), 500
 
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Endpoint oficial actualizado para Gemini 3.5 Flash
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
         
         payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
+            "contents": [
                 {
-                    "role": "system",
-                    "content": (
-                        "Eres TITÁN, un núcleo de inteligencia artificial avanzado, directo, técnico y libre. "
-                        "Respondes de forma detallada cuando se te pide investigar o analizar temas profundos, "
-                        "actuando como un asistente de investigación de nivel experto."
-                    )
-                },
-                {
-                    "role": "user", 
-                    "content": mensaje_original
+                    "parts": [
+                        {
+                            "text": (
+                                "Eres TITÁN, un núcleo de inteligencia artificial avanzado, directo, técnico y libre. "
+                                f"Responde de forma detallada al siguiente mensaje: {mensaje_original}"
+                            )
+                        }
+                    ]
                 }
-            ],
-            "temperature": 0.7
+            ]
         }
 
         response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
+            url,
             json=payload,
-            headers=headers,
+            headers={"Content-Type": "application/json"},
             timeout=30
         )
 
         if response.status_code == 200:
             result_json = response.json()
-            bot_reply = result_json["choices"][0]["message"]["content"]
+            bot_reply = result_json["candidates"][0]["content"]["parts"][0]["text"]
             
             return jsonify({
                 "exito": True,
@@ -101,7 +94,7 @@ def chat():
                 "respuesta": bot_reply
             })
         else:
-            print("Error de OpenAI API:", response.text)
+            print("Error de Gemini API:", response.text)
             return jsonify({
                 "exito": False, 
                 "error": f"Error en el motor de IA externo: {response.text}"
