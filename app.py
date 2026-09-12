@@ -8,7 +8,6 @@ app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
-# Cambiamos a la clave de OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 KLING_API_KEY = os.getenv("KLING_API_KEY")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
@@ -37,6 +36,7 @@ def chat():
         if not mensaje_original:
             return jsonify({"exito": False, "error": "Mensaje vacío"}), 400
         
+        # Manejo de generación de video (Kling / Runway)
         if any(p in mensaje_lower for p in ["crear video", "genera un video", "crear una serie", "hacer un video"]):
             if not KLING_API_KEY and not RUNWAY_API_KEY:
                 return jsonify({
@@ -64,7 +64,6 @@ def chat():
             "Content-Type": "application/json"
         }
         
-        # Estructura oficial para OpenAI con gpt-4o-mini
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
@@ -84,7 +83,6 @@ def chat():
             "temperature": 0.7
         }
 
-        # Endpoint oficial de OpenAI
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
             json=payload,
